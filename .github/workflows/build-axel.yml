@@ -1,4 +1,4 @@
-name: Build Axel for Windows - Simple Approach
+name: Build Axel with Windows Fixes
 
 on:
   push:
@@ -10,52 +10,81 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - name: Install MSYS2 and tools
-      shell: powershell
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: |
+          base-devel
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-gcc
+          make
+          autoconf
+          automake
+          git
+          wget
+          
+    - name: Clone and patch axel
+      shell: msys2 {0}
       run: |
-        choco install -y msys2
-        refreshenv
+        # 克隆axel源码
+        git clone https://github.com/axel-download-accelerator/axel.git axel-src
+        cd axel-src
         
-    - name: Build in MSYS2 environment
-      shell: cmd
+        # 创建一个Windows兼容的补丁
+        cat > windows-compat.patch << 'EOF'
+diff --git a/configure.ac b/configure.ac
+index abc123..def456 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -42,7 +42,9 @@ AC_CHECK_HEADERS([ \
+ 	netdb.h \
+ 	netinet/in.h \
+ 	netinet/tcp.h \
+-	arpa/inet.h \
++])
++AC_CHECK_HEADERS([arpa/inet.h],,,[
++	#if HAVE_WINSOCK2_H
++	#include <winsock2.h>
++	#include <ws2tcpip.h>
++	#endif
+ ])
+ AC_CHECK_HEADERS([sys/ioctl.h],,,[
+ 	#if HAVE_SYS_SOCKET_H
+EOF
+        
+        # 应用补丁
+        patch -p1 < windows-compat.patch || true
+        
+        # 重新生成configure脚本
+        autoreconf -fi
+        
+    - name: Configure with Windows workaround
+      shell: msys2 {0}
       run: |
-        set MSYSTEM=MINGW64
-        set CHERE_INVOKING=1
-        C:\tools\msys64\usr\bin\bash -lc "
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm --needed \
-            mingw-w64-x86_64-gcc \
-            mingw-w64-x86_64-make \
-            mingw-w64-x86_64-autoconf \
-            mingw-w64-x86_64-automake \
-            mingw-w64-x86_64-libssl \
-            mingw-w64-x86_64-openssl \
-            wget \
-            tar
+        cd axel-src
+        
+        # 强制设置Windows兼容性
+        export ac_cv_header_arpa_inet_h=yes
+        export ac_cv_header_netinet_in_h=yes
+        
+        ./configure \
+          --host=x86_64-w64-mingw32 \
+          --disable-nls \
+          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32 -DHAVE_ARPA_INET_H=0" \
+          LIBS="-lws2_32 -lssl -lcrypto"
           
-          wget -O axel.tar.gz https://github.com/axel-download-accelerator/axel/archive/refs/tags/v2.17.11.tar.gz
-          tar -xzf axel.tar.gz
-          cd axel-2.17.11
-          autoreconf -fi
-          ac_cv_header_arpa_inet_h=no ./configure \
-            --host=x86_64-w64-mingw32 \
-            --disable-nls \
-            CFLAGS='-static -DWIN32' \
-            LDFLAGS='-static -lws2_32'
-          make -j4
-          
-          # 检查是否生成可执行文件
-          if [ -f src/axel.exe ]; then
-            echo 'Build successful!'
-            ls -la src/axel.exe
-          else
-            echo 'Build failed!'
-            ls -la src/
-          fi
-        "
+    - name: Build
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        make -j$(nproc)
         
     - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
         name: axel-windows
-        path: axel-2.17.11/src/axel.exe
+        path: axel-src/src/axel.exe
