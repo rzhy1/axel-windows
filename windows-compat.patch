@@ -1,0 +1,106 @@
+diff --git a/configure.ac b/configure.ac
+index abc123..def456 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -42,7 +42,9 @@ AC_CHECK_HEADERS([ \
+ 	netdb.h \
+ 	netinet/in.h \
+ 	netinet/tcp.h \
+-	arpa/inet.h \
++])
++AC_CHECK_HEADERS([arpa/inet.h],,,[
++	#if HAVE_WINSOCK2_H
++	#include <winsock2.h>
++	#include <ws2tcpip.h>
++	#endif
+ ])
+ AC_CHECK_HEADERS([sys/ioctl.h],,,[
+ 	#if HAVE_SYS_SOCKET_H
+diff --git a/src/conf.c b/src/conf.c
+index 123abc..456def 100644
+--- a/src/conf.c
++++ b/src/conf.c
+@@ -25,7 +25,11 @@
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
++#ifdef _WIN32
++#include <winsock2.h>
++#else
+ #include <netdb.h>
++#endif
+ #include <ctype.h>
+ 
+ #include "axel.h"
+diff --git a/src/conn.c b/src/conn.c
+index 234bcd..567def 100644
+--- a/src/conn.c
++++ b/src/conn.c
+@@ -27,8 +27,13 @@
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
+ #include <arpa/inet.h>
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#else
+ #include <netdb.h>
+ #include <sys/time.h>
++#endif
+ #include <ctype.h>
+ #include <errno.h>
+ 
+diff --git a/src/ftp.c b/src/ftp.c
+index 345cde..678def 100644
+--- a/src/ftp.c
++++ b/src/ftp.c
+@@ -27,8 +27,13 @@
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
+ #include <arpa/inet.h>
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#else
+ #include <netdb.h>
+ #include <sys/time.h>
++#endif
+ #include <ctype.h>
+ #include <errno.h>
+ 
+diff --git a/src/http.c b/src/http.c
+index 456def..789abc 100644
+--- a/src/http.c
++++ b/src/http.c
+@@ -27,8 +27,13 @@
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
+ #include <arpa/inet.h>
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#else
+ #include <netdb.h>
+ #include <sys/time.h>
++#endif
+ #include <ctype.h>
+ #include <errno.h>
+ 
+diff --git a/src/tcp.c b/src/tcp.c
+index 567def..890abc 100644
+--- a/src/tcp.c
++++ b/src/tcp.c
+@@ -27,8 +27,13 @@
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
+ #include <arpa/inet.h>
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#else
+ #include <netdb.h>
+ #include <sys/time.h>
++#endif
+ #include <ctype.h>
+ #include <errno.h>
+ 
