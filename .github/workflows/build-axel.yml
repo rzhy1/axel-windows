@@ -22,7 +22,6 @@ jobs:
         set MSYSTEM=MINGW64
         set CHERE_INVOKING=1
         C:\tools\msys64\usr\bin\bash -lc "
-          # 更新并安装必要的包
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed \
             mingw-w64-x86_64-gcc \
@@ -34,22 +33,15 @@ jobs:
             wget \
             tar
           
-          # 下载 axel
           wget -O axel.tar.gz https://github.com/axel-download-accelerator/axel/archive/refs/tags/v2.17.11.tar.gz
           tar -xzf axel.tar.gz
           cd axel-2.17.11
-          
-          # 直接运行 autoconf 重新生成 configure 脚本
           autoreconf -fi
-          
-          # 配置时强制设置变量
           ac_cv_header_arpa_inet_h=no ./configure \
             --host=x86_64-w64-mingw32 \
             --disable-nls \
             CFLAGS='-static -DWIN32' \
             LDFLAGS='-static -lws2_32'
-          
-          # 编译
           make -j4
           
           # 检查是否生成可执行文件
