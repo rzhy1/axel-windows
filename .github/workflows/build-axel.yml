@@ -1,4 +1,4 @@
-name: Build Axel Static Windows Binary
+name: Build Axel for Windows - Simple Approach
 
 on:
   push:
@@ -10,68 +10,60 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup MSYS2 and MINGW64
-      uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        install: |
-          base-devel
-          mingw-w64-x86_64-toolchain
-          mingw-w64-x86_64-gcc
-          make
-          autoconf
-          automake
-          gettext-devel
-          openssl-devel
-          patch
-          sed
-          
-    - name: Download and patch Axel source
-      shell: msys2 {0}
+    - name: Install MSYS2 and tools
+      shell: powershell
       run: |
-        curl -L -o axel-2.17.11.tar.gz https://github.com/axel-download-accelerator/axel/releases/download/v2.17.11/axel-2.17.11.tar.gz
-        tar -xzf axel-2.17.11.tar.gz
-        cd axel-2.17.11
+        choco install -y msys2
+        refreshenv
         
-        # 直接修改 configure 脚本，跳过 arpa/inet.h 检查
-        sed -i 's/arpa\/inet\.h is required/echo "WARNING: arpa\/inet.h check skipped for Windows build"/' configure
-        sed -i 's/as_fn_error.*arpa\/inet\.h.*required/# &/' configure
-        
-    - name: Configure with forced settings
-      shell: msys2 {0}
-      run: |
-        cd axel-2.17.11
-        
-        # 强制设置环境变量
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=yes
-        
-        ./configure \
-          --host=x86_64-w64-mingw32 \
-          --build=x86_64-w64-mingw32 \
-          --disable-shared \
-          --enable-static \
-          CFLAGS="-static -Os -D_WIN32_WINNT=0x0600 -DHAVE_ARPA_INET_H=0" \
-          CPPFLAGS="-DHAVE_ARPA_INET_H=0" \
-          LDFLAGS="-static -lws2_32"
-          
-    - name: Build Axel
-      shell: msys2 {0}
-      run: |
-        cd axel-2.17.11
-        make -j$(nproc)
-        
-    - name: Test binary
+    - name: Build in MSYS2 environment
       shell: cmd
       run: |
-        cd axel-2.17.11\src
-        .\axel.exe --version
+        set MSYSTEM=MINGW64
+        set CHERE_INVOKING=1
+        C:\tools\msys64\usr\bin\bash -lc "
+          # 更新并安装必要的包
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed \
+            mingw-w64-x86_64-gcc \
+            mingw-w64-x86_64-make \
+            mingw-w64-x86_64-autoconf \
+            mingw-w64-x86_64-automake \
+            mingw-w64-x86_64-libssl \
+            mingw-w64-x86_64-openssl \
+            wget \
+            tar
+          
+          # 下载 axel
+          wget -O axel.tar.gz https://github.com/axel-download-accelerator/axel/archive/refs/tags/v2.17.11.tar.gz
+          tar -xzf axel.tar.gz
+          cd axel-2.17.11
+          
+          # 直接运行 autoconf 重新生成 configure 脚本
+          autoreconf -fi
+          
+          # 配置时强制设置变量
+          ac_cv_header_arpa_inet_h=no ./configure \
+            --host=x86_64-w64-mingw32 \
+            --disable-nls \
+            CFLAGS='-static -DWIN32' \
+            LDFLAGS='-static -lws2_32'
+          
+          # 编译
+          make -j4
+          
+          # 检查是否生成可执行文件
+          if [ -f src/axel.exe ]; then
+            echo 'Build successful!'
+            ls -la src/axel.exe
+          else
+            echo 'Build failed!'
+            ls -la src/
+          fi
+        "
         
-    - name: Upload artifact
+    - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
-        name: axel-windows-static
+        name: axel-windows
         path: axel-2.17.11/src/axel.exe
