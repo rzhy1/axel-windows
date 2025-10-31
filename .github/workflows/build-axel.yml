@@ -1,69 +1,42 @@
-name: Build Axel Static Windows Binary
+name: Cross-compile Axel for Windows
 
 on:
   push:
     tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup MSYS2 and MINGW64
-      uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        install: |
-          base-devel
-          mingw-w64-x86_64-toolchain
-          mingw-w64-x86_64-gcc
-          make
-          autoconf
-          automake
-          gettext-devel
-          openssl-devel
-          
-    - name: Download Axel source
+    - name: Install cross-compilation tools
       run: |
-        # 下载最新版本的 Axel
-        # 这里以 2.17.14 版本为例，您可以根据需要调整
-        curl -L -o axel-2.17.14.tar.gz https://github.com/axel-download-accelerator/axel/releases/download/v2.17.14/axel-2.17.14.tar.gz
-        tar -xzf axel-2.17.14.tar.gz
-        cd axel-2.17.14
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-mingw-w64-x86-64 \
+          g++-mingw-w64-x86-64 \
+          autoconf automake libtool \
+          pkg-config wget tar
         
-    - name: Configure for static build
-      shell: msys2 {0}
+    - name: Download and build Axel
       run: |
-        cd axel-2.17.14
-        # 静态编译配置
+        wget https://github.com/axel-download-accelerator/axel/releases/download/v2.17.11/axel-2.17.11.tar.gz
+        tar -xzf axel-2.17.11.tar.gz
+        cd axel-2.17.11
+        
+        # 为 Windows 交叉编译配置
         ./configure \
           --host=x86_64-w64-mingw32 \
-          --build=x86_64-w64-mingw32 \
           --disable-shared \
           --enable-static \
-          CFLAGS="-static -Os" \
-          CXXFLAGS="-static -Os" \
-          LDFLAGS="-static"
+          CFLAGS="-static -Os -DWIN32 -D_WIN32_WINNT=0x0600" \
+          LDFLAGS="-static -lws2_32"
           
-    - name: Build Axel
-      shell: msys2 {0}
-      run: |
-        cd axel-2.17.14
         make -j$(nproc)
         
-    - name: Test the binary
-      shell: cmd
-      run: |
-        cd axel-2.17.14\src
-        .\axel.exe --version
-        
-    - name: Upload artifact
+    - name: Upload Windows binary
       uses: actions/upload-artifact@v4
       with:
-        name: axel-static-windows
-        path: axel-2.17.14/src/axel.exe
+        name: axel-windows-cross-compiled
+        path: axel-2.17.11/src/axel.exe
