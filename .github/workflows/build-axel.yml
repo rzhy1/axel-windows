@@ -1,4 +1,4 @@
-name: Build Axel with Windows Fixes
+name: Build Axel with Windows Compatibility Patch
 
 on:
   push:
@@ -10,8 +10,11 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # 如果补丁文件在仓库中，确保一起检出
+        fetch-depth: 0
       
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
@@ -24,67 +27,69 @@ jobs:
           make
           autoconf
           automake
+          libtool
           git
           wget
+          patch
           
-    - name: Clone and patch axel
+    - name: Clone axel source
       shell: msys2 {0}
       run: |
-        # 克隆axel源码
         git clone https://github.com/axel-download-accelerator/axel.git axel-src
         cd axel-src
         
-        # 创建一个Windows兼容的补丁
-        cat > windows-compat.patch << 'EOF'
-diff --git a/configure.ac b/configure.ac
-index abc123..def456 100644
---- a/configure.ac
-+++ b/configure.ac
-@@ -42,7 +42,9 @@ AC_CHECK_HEADERS([ \
- 	netdb.h \
- 	netinet/in.h \
- 	netinet/tcp.h \
--	arpa/inet.h \
-+])
-+AC_CHECK_HEADERS([arpa/inet.h],,,[
-+	#if HAVE_WINSOCK2_H
-+	#include <winsock2.h>
-+	#include <ws2tcpip.h>
-+	#endif
- ])
- AC_CHECK_HEADERS([sys/ioctl.h],,,[
- 	#if HAVE_SYS_SOCKET_H
-EOF
-        
-        # 应用补丁
-        patch -p1 < windows-compat.patch || true
-        
-        # 重新生成configure脚本
-        autoreconf -fi
-        
-    - name: Configure with Windows workaround
+    - name: Apply Windows compatibility patch
       shell: msys2 {0}
       run: |
         cd axel-src
         
-        # 强制设置Windows兼容性
-        export ac_cv_header_arpa_inet_h=yes
-        export ac_cv_header_netinet_in_h=yes
+        # 应用补丁文件
+        if [ -f ../windows-compat.patch ]; then
+          echo "Applying windows-compat.patch..."
+          patch -p1 < ../windows-compat.patch
+        else
+          # 如果补丁文件不存在，从URL下载
+          echo "Downloading and applying Windows compatibility patch..."
+          curl -L -o windows-compat.patch https://raw.githubusercontent.com/your-username/your-repo/main/windows-compat.patch
+          patch -p1 < windows-compat.patch
+        fi
+        
+    - name: Regenerate configure scripts
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        autoreconf -fi
+        
+    - name: Configure for Windows build
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        
+        # 设置Windows编译环境
+        export ac_cv_header_arpa_inet_h=no
         
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32 -DHAVE_ARPA_INET_H=0" \
+          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32" \
           LIBS="-lws2_32 -lssl -lcrypto"
           
-    - name: Build
+    - name: Build axel
       shell: msys2 {0}
       run: |
         cd axel-src
         make -j$(nproc)
         
-    - name: Upload binary
+    - name: Verify binary
+      shell: cmd
+      run: |
+        cd axel-src\src
+        .\axel.exe --version
+        dir .\axel.exe
+        
+    - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
-        name: axel-windows
+        name: axel-windows-static
         path: axel-src/src/axel.exe
+        retention-days: 30
