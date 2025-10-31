@@ -12,9 +12,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        # 如果补丁文件在仓库中，确保一起检出
-        fetch-depth: 0
       
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
@@ -38,21 +35,35 @@ jobs:
         git clone https://github.com/axel-download-accelerator/axel.git axel-src
         cd axel-src
         
-    - name: Apply Windows compatibility patch
+    - name: Create and apply simplified patch
       shell: msys2 {0}
       run: |
         cd axel-src
         
-        # 应用补丁文件
-        if [ -f ../windows-compat.patch ]; then
-          echo "Applying windows-compat.patch..."
-          patch -p1 < ../windows-compat.patch
-        else
-          # 如果补丁文件不存在，从URL下载
-          echo "Downloading and applying Windows compatibility patch..."
-          curl -L -o windows-compat.patch https://raw.githubusercontent.com/your-username/your-repo/main/windows-compat.patch
-          patch -p1 < windows-compat.patch
-        fi
+        # 创建简化补丁
+        cat > simple-fix.patch << 'EOF'
+--- a/configure.ac
++++ b/configure.ac
+@@ -42,7 +42,6 @@ AC_CHECK_HEADERS([ \\
+ 	netdb.h \\
+ 	netinet/in.h \\
+ 	netinet/tcp.h \\
+-	arpa/inet.h \\
+ ])
+ 
+ # 在文件末尾添加Windows兼容性定义
+@@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \\
+ # Windows兼容性
+ if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then
+   AC_DEFINE(HAVE_ARPA_INET_H, 0, [Define to 1 if you have the <arpa/inet.h> header file.])
++  AC_DEFINE(HAVE_NETINET_IN_H, 1, [Define to 1 if you have the <netinet/in.h> header file.])
++else
++  AC_CHECK_HEADERS([arpa/inet.h])
+ fi
+ EOF
+        
+        # 应用补丁
+        patch -p1 < simple-fix.patch
         
     - name: Regenerate configure scripts
       shell: msys2 {0}
@@ -65,13 +76,14 @@ jobs:
       run: |
         cd axel-src
         
-        # 设置Windows编译环境
+        # 强制设置Windows环境
         export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=yes
         
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32" \
+          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32 -DHAVE_ARPA_INET_H=0" \
           LIBS="-lws2_32 -lssl -lcrypto"
           
     - name: Build axel
@@ -85,11 +97,9 @@ jobs:
       run: |
         cd axel-src\src
         .\axel.exe --version
-        dir .\axel.exe
         
     - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
         name: axel-windows-static
         path: axel-src/src/axel.exe
-        retention-days: 30
