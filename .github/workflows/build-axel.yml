@@ -1,4 +1,4 @@
-name: Cross-compile Axel for Windows
+name: Build Axel Static Windows Binary
 
 on:
   push:
@@ -7,36 +7,76 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     
     steps:
-    - name: Install cross-compilation tools
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSYS2 and MINGW64
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: |
+          base-devel
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-gcc
+          make
+          autoconf
+          automake
+          gettext-devel
+          openssl-devel
+          
+    - name: Download Axel source
+      shell: msys2 {0}
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          gcc-mingw-w64-x86-64 \
-          g++-mingw-w64-x86-64 \
-          autoconf automake libtool \
-          pkg-config wget tar
-        
-    - name: Download and build Axel
-      run: |
-        wget https://github.com/axel-download-accelerator/axel/releases/download/v2.17.11/axel-2.17.11.tar.gz
+        curl -L -o axel-2.17.11.tar.gz https://github.com/axel-download-accelerator/axel/releases/download/v2.17.11/axel-2.17.11.tar.gz
         tar -xzf axel-2.17.11.tar.gz
+        
+    - name: Pre-configure for Windows
+      shell: msys2 {0}
+      run: |
         cd axel-2.17.11
         
-        # 为 Windows 交叉编译配置
+        # 创建缓存文件来跳过 arpa/inet.h 检查
+        cat > config.cache << 'EOF'
+ac_cv_header_arpa_inet_h=no
+ac_cv_header_netdb_h=yes
+ac_cv_header_netinet_in_h=yes
+ac_cv_header_sys_socket_h=yes
+ac_cv_func_malloc_0_nonnull=yes
+ac_cv_func_realloc_0_nonnull=yes
+EOF
+        
+    - name: Configure with cache
+      shell: msys2 {0}
+      run: |
+        cd axel-2.17.11
+        
+        # 使用缓存文件配置
         ./configure \
           --host=x86_64-w64-mingw32 \
+          --build=x86_64-w64-mingw32 \
           --disable-shared \
           --enable-static \
-          CFLAGS="-static -Os -DWIN32 -D_WIN32_WINNT=0x0600" \
-          LDFLAGS="-static -lws2_32"
+          --cache-file=config.cache \
+          CFLAGS="-static -Os -D_WIN32_WINNT=0x0600" \
+          LDFLAGS="-static -lws2_32 -lssl -lcrypto"
           
+    - name: Build Axel
+      shell: msys2 {0}
+      run: |
+        cd axel-2.17.11
         make -j$(nproc)
         
-    - name: Upload Windows binary
+    - name: Test binary
+      shell: cmd
+      run: |
+        cd axel-2.17.11\src
+        .\axel.exe --version
+        
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: axel-windows-cross-compiled
+        name: axel-windows-static
         path: axel-2.17.11/src/axel.exe
