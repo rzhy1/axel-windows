@@ -26,42 +26,37 @@ jobs:
           automake
           gettext-devel
           openssl-devel
+          patch
+          sed
           
-    - name: Download Axel source
+    - name: Download and patch Axel source
       shell: msys2 {0}
       run: |
         curl -L -o axel-2.17.11.tar.gz https://github.com/axel-download-accelerator/axel/releases/download/v2.17.11/axel-2.17.11.tar.gz
         tar -xzf axel-2.17.11.tar.gz
+        cd axel-2.17.11
         
-    - name: Pre-configure for Windows
+        # 直接修改 configure 脚本，跳过 arpa/inet.h 检查
+        sed -i 's/arpa\/inet\.h is required/echo "WARNING: arpa\/inet.h check skipped for Windows build"/' configure
+        sed -i 's/as_fn_error.*arpa\/inet\.h.*required/# &/' configure
+        
+    - name: Configure with forced settings
       shell: msys2 {0}
       run: |
         cd axel-2.17.11
         
-        # 创建缓存文件来跳过 arpa/inet.h 检查
-        cat > config.cache << 'EOF'
-ac_cv_header_arpa_inet_h=no
-ac_cv_header_netdb_h=yes
-ac_cv_header_netinet_in_h=yes
-ac_cv_header_sys_socket_h=yes
-ac_cv_func_malloc_0_nonnull=yes
-ac_cv_func_realloc_0_nonnull=yes
-EOF
+        # 强制设置环境变量
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=yes
         
-    - name: Configure with cache
-      shell: msys2 {0}
-      run: |
-        cd axel-2.17.11
-        
-        # 使用缓存文件配置
         ./configure \
           --host=x86_64-w64-mingw32 \
           --build=x86_64-w64-mingw32 \
           --disable-shared \
           --enable-static \
-          --cache-file=config.cache \
-          CFLAGS="-static -Os -D_WIN32_WINNT=0x0600" \
-          LDFLAGS="-static -lws2_32 -lssl -lcrypto"
+          CFLAGS="-static -Os -D_WIN32_WINNT=0x0600 -DHAVE_ARPA_INET_H=0" \
+          CPPFLAGS="-DHAVE_ARPA_INET_H=0" \
+          LDFLAGS="-static -lws2_32"
           
     - name: Build Axel
       shell: msys2 {0}
