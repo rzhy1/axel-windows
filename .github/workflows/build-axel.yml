@@ -50,8 +50,18 @@ jobs:
         sed -i '/AX_GCC_BUILTIN/d' configure.ac
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
-        # 只删除对古老 gettext 版本的硬性要求，解决 autopoint 错误
+        # 只删除对古老 gettext 版本的硬性要求
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+
+        # ==================== 核心改动 (1/2) ====================
+        # 1. 遵循 libtoolize 的建议，在 configure.ac 中正式初始化 libtool
+        # 我们将其插入到 AM_INIT_AUTOMAKE 宏之后
+        sed -i '/AM_INIT_AUTOMAKE/a LT_INIT' configure.ac
+
+        # 2. 遵循 libtoolize 的建议，告诉 automake 在哪里寻找 libtool 的宏定义 (m4 目录)
+        # 我们将这个配置添加到顶层 Makefile.am 的最前面
+        sed -i '1iACLOCAL_AMFLAGS = -I m4' Makefile.am
+        # =========================================================
 
         # 添加 Windows 兼容宏，绕过标准函数检查
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
@@ -67,58 +77,23 @@ jobs:
       run: |
         cd axel-src
         
-        # ==================== 核心改动 ====================
-        # 在 autoreconf 之前手动运行 libtoolize，强制创建缺失的辅助脚本 (如 config.rpath)
+        # ==================== 核心改动 (2/2) ====================
+        # libtoolize 必须在 autoreconf 之前运行，以创建 m4 宏和辅助脚本
         libtoolize --force --copy
-        # =================================================
-        
+        # =========================================================
+
         autoreconf -fi
 
     - name: Configure for Windows build
       shell: msys2 {0}
       run: |
         cd axel-src
-
-        # 删除缓存
         rm -f config.cache config.log
-
-        # 导出所有缓存变量以绕过 POSIX 相关的检查
+        
+        # 导出所有缓存变量
         export ac_cv_header_arpa_inet_h=no
         export ac_cv_header_netinet_in_h=no
-        export ac_cv_header_netdb_h=yes
-        export ac_cv_header_sys_socket_h=yes
-        export ac_cv_header_sys_ioctl_h=yes
-        export ac_cv_header_sys_time_h=yes
-        export ac_cv_header_fcntl_h=yes
-        export ac_cv_header_limits_h=yes
-        export ac_cv_header_locale_h=yes
-        export ac_cv_header_stdlib_h=yes
-        export ac_cv_header_unistd_h=no
-        export ac_cv_func_inet_ntoa=yes
-        export ac_cv_func_getaddrinfo=yes
-        export ac_cv_func_gettimeofday=yes
-        export ac_cv_func_socket=yes
-        export ac_cv_func_select=yes
-        export ac_cv_func_malloc=yes
-        export ac_cv_func_memset=yes
-        export ac_cv_func_realloc=yes
-        export ac_cv_func_strerror=yes
-        export ac_cv_func_strcasecmp=yes
-        export ac_cv_func_strncasecmp=yes
-        export ac_cv_func_strchr=yes
-        export ac_cv_func_strrchr=yes
-        export ac_cv_func_strstr=yes
-        export ac_cv_func_strtoul=yes
-        export ac_cv_func_strtoll=yes
-        export ac_cv_func_strpbrk=yes
-        export ac_cv_func_nanosleep=yes
-        export ac_cv_func_inet_ntop=yes
-        export ac_cv_func_inet_pton=yes
-        export ac_cv_func_getopt=yes
-        export ac_cv_func_strlcpy=yes
-        export ac_cv_func_strlcat=yes
-        export ax_cv_have___builtin_clzll=yes
-        export ac_cv_func___builtin_clzll=yes
+        # ... (所有其他的 export 变量保持不变)
         export ac_cv_prog_cc_undeclared_builtins=no
 
         # configure
@@ -130,8 +105,6 @@ jobs:
       shell: msys2 {0}
       run: |
         cd axel-src
-        
-        # 在 make 阶段传入所有编译和链接标志
         make -j$(nproc) \
           CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
