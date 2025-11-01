@@ -72,6 +72,17 @@ jobs:
       run: |
         cd axel-src
 
+        # 强制头文件检查结果，绕过 Windows 缺失 POSIX 头文件
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=yes
+        export ac_cv_header_netdb_h=yes
+        export ac_cv_header_sys_socket_h=yes
+        export ac_cv_header_sys_ioctl_h=yes
+        export ac_cv_header_sys_time_h=yes
+        export ac_cv_header_unistd_h=no
+        export ac_cv_func_getaddrinfo=yes
+        export ac_cv_func_gettimeofday=yes
+
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
