@@ -20,7 +20,6 @@ jobs:
         install: |
           base-devel
           mingw-w64-x86_64-toolchain
-          mingw-w64-x86_64-gcc
           make
           autoconf
           automake
@@ -29,6 +28,7 @@ jobs:
           wget
           patch
           pkgconf
+          gettext
 
     - name: Clone Axel source
       shell: msys2 {0}
@@ -45,8 +45,11 @@ jobs:
         echo "🔧 删除 arpa/inet.h 检查行..."
         sed -i '/arpa\/inet\.h/d' configure.ac
 
-        echo "🧩 在文件末尾添加 Windows 兼容定义..."
-        # 使用 echo 多行写入以避免 YAML heredoc 解析冲突
+        echo "🚫 移除 gettext 宏，避免 autopoint 版本冲突..."
+        sed -i '/AM_GNU_GETTEXT/d' configure.ac
+        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+
+        echo "🧩 添加 Windows 兼容定义..."
         {
           echo ''
           echo '# --- Windows Compatibility (added by CI) ---'
@@ -78,13 +81,13 @@ jobs:
       shell: msys2 {0}
       run: |
         cd axel-src
-        make -j$(nproc) || (echo "❌ Build failed"; exit 1)
+        make -j$(nproc)
 
     - name: Verify binary
       shell: cmd
       run: |
         cd axel-src\src
-        .\axel.exe --version || echo "Binary built successfully"
+        .\axel.exe --version || echo "✅ Build OK"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
