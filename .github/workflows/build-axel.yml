@@ -43,7 +43,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除 Windows 下不存在的 POSIX 头文件检查
+        # 删除 Windows 不存在的 POSIX 头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
 
@@ -74,10 +74,10 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除 configure 缓存
+        # 删除旧缓存
         rm -f config.cache config.log
 
-        # 一次性设置所有 POSIX 头文件、函数、宏的 CV 变量并执行 configure
+        # 一次性设置所有 POSIX 头文件、函数和宏 CV 变量
         ac_cv_header_arpa_inet_h=no \
         ac_cv_header_netinet_in_h=yes \
         ac_cv_header_netdb_h=yes \
