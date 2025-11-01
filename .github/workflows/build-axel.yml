@@ -46,15 +46,16 @@ jobs:
         sed -i '/arpa\/inet\.h/d' configure.ac
 
         echo "🧩 在文件末尾添加 Windows 兼容定义..."
-        cat >> configure.ac <<'EOF'
-
-# --- Windows Compatibility (added by CI) ---
-AS_IF([echo "$host_os" | grep -qi mingw], [
-  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])
-  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])
-  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])
-])
-EOF
+        # 使用 echo 多行写入以避免 YAML heredoc 解析冲突
+        {
+          echo ''
+          echo '# --- Windows Compatibility (added by CI) ---'
+          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
+          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
+          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])'
+          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
+          echo '])'
+        } >> configure.ac
 
     - name: Regenerate configure scripts
       shell: msys2 {0}
