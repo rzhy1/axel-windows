@@ -74,7 +74,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 设置所有 POSIX 头文件和函数 CV 变量
+        # 强制 configure 认为缺失的 POSIX 头文件存在/不存在
         export ac_cv_header_arpa_inet_h=no
         export ac_cv_header_netinet_in_h=yes
         export ac_cv_header_netdb_h=yes
@@ -87,6 +87,7 @@ jobs:
         export ac_cv_header_stdlib_h=yes
         export ac_cv_header_unistd_h=no
 
+        # 强制 configure 认为标准 C 函数可用
         export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
@@ -103,6 +104,12 @@ jobs:
         export ac_cv_func_strstr=yes
         export ac_cv_func_strtoul=yes
         export ac_cv_func_strtoll=yes
+        export ac_cv_func_strpbrk=yes
+        export ac_cv_func_nanosleep=yes
+        export ac_cv_func_inet_ntop=yes
+        export ac_cv_func_inet_pton=yes
+        export ac_cv_func_getopt=yes
+        export ac_cv_func_gettimeofday=yes
 
         ./configure \
           --host=x86_64-w64-mingw32 \
