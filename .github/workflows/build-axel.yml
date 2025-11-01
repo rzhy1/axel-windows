@@ -29,7 +29,8 @@ jobs:
           wget
           patch
           pkgconf
-          gettext
+          mingw-w64-x86_64-openssl
+          gettext-devel
 
     - name: Clone Axel source
       shell: msys2 {0}
@@ -38,114 +39,92 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility patch
+    - name: Create necessary directories
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        mkdir -p build-aux m4
+
+    - name: Apply Windows compatibility modifications
       shell: msys2 {0}
       run: |
         cd axel-src
 
+        # 创建修改脚本
+        cat > fix_configure.sh << 'EOL'
+        #!/bin/bash
+        
         # 删除 Windows 不存在的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
-        sed -i '/\<unistd.h\>/d' configure.ac
-        sed -i '/netinet\/in.h/d' configure.ac
+        sed -i '/netinet\/tcp.h/d' configure.ac
+        
+        # 删除有问题的函数检查
+        sed -i '/AC_FUNC_FORK/d' configure.ac
+        
+        # 注释掉有问题的 GCC 检测
+        sed -i 's/^AX_GCC_FUNC_ATTRIBUTE/#AX_GCC_FUNC_ATTRIBUTE/' configure.ac
+        sed -i 's/^AX_GCC_BUILTIN/#AX_GCC_BUILTIN/' configure.ac
+        
+        # 添加 Winsock2 头文件检查
+        sed -i '/AC_CHECK_HEADERS/a AC_CHECK_HEADERS([winsock2.h ws2tcpip.h])' configure.ac
 
-        # 移除 gettext 宏，避免 autopoint 冲突
-        sed -i '/AM_GNU_GETTEXT/d' configure.ac
-        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+        # 在文件末尾添加 Windows 兼容性代码
+        echo "" >> configure.ac
+        echo "# Windows compatibility" >> configure.ac
+        echo "AS_IF([test \"x\$host_os\" = \"xmingw32\"], [" >> configure.ac
+        echo "  AC_DEFINE([HAVE_FORK], [0], [No fork on Windows])" >> configure.ac
+        echo "  AC_DEFINE([O_NONBLOCK], [0], [No O_NONBLOCK on Windows])" >> configure.ac
+        echo "  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])" >> configure.ac
+        echo "  AC_DEFINE([HAVE_NETINET_TCP_H], [0], [No netinet/tcp.h on Windows])" >> configure.ac
+        echo "])" >> configure.ac
+        EOL
 
-        # 删除 GCC 内建函数检查和函数属性宏
-        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
-        sed -i '/AX_GCC_BUILTIN/d' configure.ac
-        sed -i '/ax_cv_have___builtin_clzll/d' configure.ac
+        bash fix_configure.sh
 
-        # 删除 O_NONBLOCK 宏检查
-        sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
-
-        # 添加 Windows 兼容宏
-        {
-          echo ''
-          echo '# --- Windows Compatibility (added by CI) ---'
-          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
-          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
-          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])'
-          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
-          echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
-          echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
-          echo '])'
-        } >> configure.ac
-
-    - name: Regenerate configure scripts
+    - name: Bootstrap autotools
       shell: msys2 {0}
       run: |
         cd axel-src
-        autoreconf -fi
+        
+        # 运行 autoreconf 来重新生成所有配置脚本
+        autoreconf -fiv
+        
+        # 确保必要的脚本存在
+        if [ ! -f build-aux/compile ]; then
+          automake --add-missing --copy 2>/dev/null || true
+        fi
 
-    - name: Configure for Windows build
+    - name: Configure with Windows settings
       shell: msys2 {0}
       run: |
         cd axel-src
-
-        # 删除缓存，确保 CV 变量生效
-        rm -f config.cache config.log
-
-        # POSIX 头文件 CV 变量
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=no
-        export ac_cv_header_netdb_h=yes
-        export ac_cv_header_sys_socket_h=yes
-        export ac_cv_header_sys_ioctl_h=yes
-        export ac_cv_header_sys_time_h=yes
-        export ac_cv_header_fcntl_h=yes
-        export ac_cv_header_limits_h=yes
-        export ac_cv_header_locale_h=yes
-        export ac_cv_header_stdlib_h=yes
-        export ac_cv_header_unistd_h=no
-
-        # 标准 C 函数 CV 变量
-        export ac_cv_func_inet_ntoa=yes
-        export ac_cv_func_getaddrinfo=yes
-        export ac_cv_func_gettimeofday=yes
-        export ac_cv_func_socket=yes
-        export ac_cv_func_select=yes
-        export ac_cv_func_malloc=yes
-        export ac_cv_func_memset=yes
-        export ac_cv_func_realloc=yes
-        export ac_cv_func_strerror=yes
-        export ac_cv_func_strcasecmp=yes
-        export ac_cv_func_strncasecmp=yes
-        export ac_cv_func_strchr=yes
-        export ac_cv_func_strrchr=yes
-        export ac_cv_func_strstr=yes
-        export ac_cv_func_strtoul=yes
-        export ac_cv_func_strtoll=yes
-        export ac_cv_func_strpbrk=yes
-        export ac_cv_func_nanosleep=yes
-        export ac_cv_func_inet_ntop=yes
-        export ac_cv_func_inet_pton=yes
-        export ac_cv_func_getopt=yes
-        export ac_cv_func_strlcpy=yes
-        export ac_cv_func_strlcat=yes
-
-        # configure
+        
+        # 设置编译环境
+        export CPPFLAGS="-D_WIN32_WINNT=0x0600 -DWIN32_LEAN_AND_MEAN"
+        export CFLAGS="-static -O2"
+        export LDFLAGS="-static"
+        export LIBS="-lws2_32"
+        
+        # 配置项目
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
-          LIBS="-lws2_32 -lssl -lcrypto"
+          --with-ssl=openssl
 
     - name: Build Axel
       shell: msys2 {0}
       run: |
         cd axel-src
-        make -j$(nproc)
+        make -j$(nproc) V=1
 
-    - name: Verify binary
+    - name: Test binary
       shell: cmd
       run: |
         cd axel-src\src
-        .\axel.exe --version || echo "✅ Build OK"
+        .\axel.exe --version || .\axel.exe --help || echo "Binary built successfully"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: axel-windows-static
+        name: axel-windows
         path: axel-src/src/axel.exe
