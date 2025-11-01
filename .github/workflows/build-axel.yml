@@ -43,7 +43,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除 arpa/inet.h 和 unistd.h 检查行
+        # 删除导致 Windows 报错的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
 
@@ -74,43 +74,43 @@ jobs:
       run: |
         cd axel-src
 
-        # 强制 configure 认为缺失的 POSIX 头文件存在/不存在
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=yes
-        export ac_cv_header_netdb_h=yes
-        export ac_cv_header_sys_socket_h=yes
-        export ac_cv_header_sys_ioctl_h=yes
-        export ac_cv_header_sys_time_h=yes
-        export ac_cv_header_fcntl_h=yes
-        export ac_cv_header_limits_h=yes
-        export ac_cv_header_locale_h=yes
-        export ac_cv_header_stdlib_h=yes
-        export ac_cv_header_unistd_h=no
+        # 删除旧缓存
+        rm -f config.cache config.log
 
-        # 强制 configure 认为标准 C 函数可用
-        export ac_cv_func_inet_ntoa=yes
-        export ac_cv_func_getaddrinfo=yes
-        export ac_cv_func_gettimeofday=yes
-        export ac_cv_func_socket=yes
-        export ac_cv_func_select=yes
-        export ac_cv_func_malloc=yes
-        export ac_cv_func_memset=yes
-        export ac_cv_func_realloc=yes
-        export ac_cv_func_strerror=yes
-        export ac_cv_func_strcasecmp=yes
-        export ac_cv_func_strncasecmp=yes
-        export ac_cv_func_strchr=yes
-        export ac_cv_func_strrchr=yes
-        export ac_cv_func_strstr=yes
-        export ac_cv_func_strtoul=yes
-        export ac_cv_func_strtoll=yes
-        export ac_cv_func_strpbrk=yes
-        export ac_cv_func_nanosleep=yes
-        export ac_cv_func_inet_ntop=yes
-        export ac_cv_func_inet_pton=yes
-        export ac_cv_func_getopt=yes
-        export ac_cv_func_gettimeofday=yes
-
+        # 在同一个 shell 中导出所有 POSIX 头文件、函数和宏的 CV 变量并执行 configure
+        ac_cv_header_arpa_inet_h=no \
+        ac_cv_header_netinet_in_h=yes \
+        ac_cv_header_netdb_h=yes \
+        ac_cv_header_sys_socket_h=yes \
+        ac_cv_header_sys_ioctl_h=yes \
+        ac_cv_header_sys_time_h=yes \
+        ac_cv_header_fcntl_h=yes \
+        ac_cv_header_limits_h=yes \
+        ac_cv_header_locale_h=yes \
+        ac_cv_header_stdlib_h=yes \
+        ac_cv_header_unistd_h=no \
+        ac_cv_func_inet_ntoa=yes \
+        ac_cv_func_getaddrinfo=yes \
+        ac_cv_func_gettimeofday=yes \
+        ac_cv_func_socket=yes \
+        ac_cv_func_select=yes \
+        ac_cv_func_malloc=yes \
+        ac_cv_func_memset=yes \
+        ac_cv_func_realloc=yes \
+        ac_cv_func_strerror=yes \
+        ac_cv_func_strcasecmp=yes \
+        ac_cv_func_strncasecmp=yes \
+        ac_cv_func_strchr=yes \
+        ac_cv_func_strrchr=yes \
+        ac_cv_func_strstr=yes \
+        ac_cv_func_strtoul=yes \
+        ac_cv_func_strtoll=yes \
+        ac_cv_func_strpbrk=yes \
+        ac_cv_func_nanosleep=yes \
+        ac_cv_func_inet_ntop=yes \
+        ac_cv_func_inet_pton=yes \
+        ac_cv_func_getopt=yes \
+        ac_cv_macro_O_NONBLOCK=yes \
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
