@@ -72,6 +72,131 @@ jobs:
       run: |
         cd axel-src
 
+        # 强制 configure 认为缺失的 POSIX 头文件和函数存在/不存在
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=yes
+        export ac_cv_header_netdb_h=yes
+        export ac_cv_header_sys_socket_h=yes
+        export ac_cv_header_sys_ioctl_h=yes
+        export ac_cv_header_sys_time_h=yes
+        export ac_cv_header_fcntl_h=yes
+        export ac_cv_header_limits_h=yes
+        export ac_cv_header_locale_h=yes
+        export ac_cv_header_stdlib_h=yes
+        export ac_cv_header_unistd_h=no
+        export ac_cv_func_getaddrinfo=yes
+        export ac_cv_func_gettimeofday=yes
+        export ac_cv_func_malloc=yes
+        export ac_cv_func_memset=yes
+        export ac_cv_func_realloc=yes
+        export ac_cv_func_select=yes
+        export ac_cv_func_socket=yes
+        export ac_cv_func_strerror=yes
+        export ac_cv_func_strcasecmp=yes
+        export ac_cv_func_strncasecmp=yes
+        export ac_cv_func_strchr=yes
+        export ac_cv_func_strrchr=yes
+        export ac_cv_func_strstr=yes
+        export ac_cv_func_strtoul=yes
+        export ac_cv_func_strtoll=yes
+
+        ./configure \
+          --host=x86_64-w64-mingw32 \
+          --disable-nls \
+          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
+          LIBS="-lws2_32 -lssl -lcrypto"
+
+    - name: Build Axel
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        make -j$(nproc)
+
+    - name: Verify binary
+      shell: cmd
+      run: |
+        cd axel-src\src
+        .\axel.exe --version || echo "✅ Build OK"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: axel-windows-static
+        path: axel-src/src/axel.exe
+name: Build Axel (Windows Compatibility)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MSYS2 environment
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: |
+          base-devel
+          mingw-w64-x86_64-toolchain
+          make
+          autoconf
+          automake
+          autoconf-archive
+          libtool
+          git
+          wget
+          patch
+          pkgconf
+          gettext
+
+    - name: Clone Axel source
+      shell: msys2 {0}
+      run: |
+        git clone https://github.com/axel-download-accelerator/axel.git axel-src
+        cd axel-src
+        git log -1 --oneline
+
+    - name: Apply Windows compatibility fix
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+
+        echo "🔧 删除 arpa/inet.h 检查行..."
+        sed -i '/arpa\/inet\.h/d' configure.ac
+
+        echo "🚫 移除 gettext 宏，避免 autopoint 版本冲突..."
+        sed -i '/AM_GNU_GETTEXT/d' configure.ac
+        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+
+        echo "🧩 添加 Windows 兼容定义..."
+        {
+          echo ''
+          echo '# --- Windows Compatibility (added by CI) ---'
+          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
+          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
+          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])'
+          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
+          echo '])'
+        } >> configure.ac
+
+    - name: Regenerate configure scripts
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        autoreconf -fi
+
+    - name: Configure for Windows build
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+
         # 强制头文件检查结果，绕过 Windows 缺失 POSIX 头文件
         export ac_cv_header_arpa_inet_h=no
         export ac_cv_header_netinet_in_h=yes
