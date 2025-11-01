@@ -52,7 +52,7 @@ jobs:
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        # 添加 Windows 兼容宏，并绕过 O_NONBLOCK 检查
+        # 添加 Windows 兼容宏
         echo '' >> configure.ac
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
         echo 'AS_IF([echo "$host_os" | grep -qi mingw], [' >> configure.ac
@@ -61,8 +61,6 @@ jobs:
         echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])' >> configure.ac
         echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])' >> configure.ac
         echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])' >> configure.ac
-        echo '], [' >> configure.ac
-        echo '  AXEL_CHECK_MACRO([O_NONBLOCK], [fcntl.h])' >> configure.ac
         echo '])' >> configure.ac
 
     - name: Regenerate configure scripts
@@ -76,10 +74,12 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除缓存，确保 CV 变量生效
+        # 删除缓存
         rm -f config.cache config.log
 
         # POSIX 头文件 CV 变量
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=no
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
         export ac_cv_header_sys_ioctl_h=yes
@@ -88,6 +88,7 @@ jobs:
         export ac_cv_header_limits_h=yes
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
+        export ac_cv_header_unistd_h=no
 
         # 标准 C 函数 CV 变量
         export ac_cv_func_inet_ntoa=yes
@@ -114,9 +115,11 @@ jobs:
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
 
-        ./configure \
-          --host=x86_64-w64-mingw32 \
-          --disable-nls \
+        # O_NONBLOCK 宏 CV 变量
+        export ac_cv_macro_O_NONBLOCK=yes
+
+        # 执行 configure
+        ./configure --host=x86_64-w64-mingw32 --disable-nls \
           CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
 
