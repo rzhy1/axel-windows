@@ -50,9 +50,11 @@ jobs:
         sed -i '/AX_GCC_BUILTIN/d' configure.ac
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
-        # 删除 gettext 宏，避免 autopoint 失败
-        sed -i '/AM_GNU_GETTEXT/d' configure.ac
-        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+        # ==================== 核心改动 ====================
+        # 不再删除 gettext 宏，改用 --disable-nls 开关
+        # sed -i '/AM_GNU_GETTEXT/d' configure.ac
+        # sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+        # =================================================
 
         # 添加 Windows 兼容宏，绕过标准函数检查
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
@@ -116,20 +118,17 @@ jobs:
         export ac_cv_func___builtin_clzll=yes
         export ac_cv_prog_cc_undeclared_builtins=no
 
-        # ==================== 核心改动 ====================
-        # configure 阶段不提供 CFLAGS 和 LIBS，避免干扰其内部测试
-        # 只指定交叉编译目标
-        # =================================================
-        ./configure --host=x86_64-w64-mingw32
+        # configure
+        ./configure \
+          --host=x86_64-w64-mingw32 \
+          --disable-nls # <--- 新增的标志，用于干净地禁用多语言支持
 
     - name: Build Axel
       shell: msys2 {0}
       run: |
         cd axel-src
         
-        # ==================== 核心改动 ====================
         # 在 make 阶段传入所有编译和链接标志
-        # =================================================
         make -j$(nproc) \
           CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
