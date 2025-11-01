@@ -38,12 +38,12 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility fix
+    - name: Apply Windows compatibility patch
       shell: msys2 {0}
       run: |
         cd axel-src
 
-        # 删除 Windows 下不存在的头文件检查
+        # 删除 Windows 不存在的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
 
@@ -51,7 +51,7 @@ jobs:
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        # 添加 Windows 兼容宏
+        # 添加 Windows 兼容宏，包括 O_NONBLOCK
         {
           echo ''
           echo '# --- Windows Compatibility (added by CI) ---'
@@ -60,6 +60,7 @@ jobs:
           echo '  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])'
           echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
           echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
+          echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
           echo '])'
         } >> configure.ac
 
@@ -74,12 +75,10 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除 configure 缓存
+        # 删除缓存，确保 CV 变量生效
         rm -f config.cache config.log
 
-        # 一次性设置所有 POSIX 头文件、函数和宏 CV 变量
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=yes
+        # 设置所有标准头文件和函数 CV 变量
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
         export ac_cv_header_sys_ioctl_h=yes
@@ -88,7 +87,6 @@ jobs:
         export ac_cv_header_limits_h=yes
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
-        export ac_cv_header_unistd_h=no
 
         export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
@@ -114,10 +112,9 @@ jobs:
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
 
-        # POSIX 宏
-        export ac_cv_macro_O_NONBLOCK=yes
+        # configure 在 Windows 下直接使用宏绕过 O_NONBLOCK
+        # 无需再设置 ac_cv_macro_O_NONBLOCK
 
-        # 执行 configure
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
