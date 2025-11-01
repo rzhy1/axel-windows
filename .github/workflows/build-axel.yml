@@ -52,7 +52,6 @@ jobs:
 -	arpa/inet.h \
  ])
  
- # 在文件末尾添加Windows兼容性定义
 @@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \
  # Windows兼容性
  if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then
