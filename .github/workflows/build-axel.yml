@@ -51,9 +51,8 @@ jobs:
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
         # ==================== 核心改动 ====================
-        # 不再删除 gettext 宏，改用 --disable-nls 开关
-        # sed -i '/AM_GNU_GETTEXT/d' configure.ac
-        # sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+        # 只删除对古老 gettext 版本的硬性要求，解决 autopoint 错误
+        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
         # =================================================
 
         # 添加 Windows 兼容宏，绕过标准函数检查
@@ -121,7 +120,7 @@ jobs:
         # configure
         ./configure \
           --host=x86_64-w64-mingw32 \
-          --disable-nls # <--- 新增的标志，用于干净地禁用多语言支持
+          --disable-nls
 
     - name: Build Axel
       shell: msys2 {0}
