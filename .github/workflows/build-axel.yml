@@ -77,7 +77,7 @@ jobs:
         # 删除缓存
         rm -f config.cache config.log
 
-        # POSIX 头文件 CV 变量
+        # 导出所有缓存变量以绕过 POSIX 相关的检查
         export ac_cv_header_arpa_inet_h=no
         export ac_cv_header_netinet_in_h=no
         export ac_cv_header_netdb_h=yes
@@ -89,8 +89,6 @@ jobs:
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
         export ac_cv_header_unistd_h=no
-
-        # 标准 C 函数 CV 变量
         export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
@@ -114,27 +112,27 @@ jobs:
         export ac_cv_func_getopt=yes
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
-
-        # 内建函数/宏绕过
         export ax_cv_have___builtin_clzll=yes
         export ac_cv_func___builtin_clzll=yes
-        
-        # ==================== 关键修复 ====================
-        # 显式禁用 GCC 内建函数声明检查，解决 "cannot report undeclared builtins" 错误
         export ac_cv_prog_cc_undeclared_builtins=no
-        # =================================================
 
-        # configure
-        ./configure \
-          --host=x86_64-w64-mingw32 \
-          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
-          LIBS="-lws2_32 -lssl -lcrypto"
+        # ==================== 核心改动 ====================
+        # configure 阶段不提供 CFLAGS 和 LIBS，避免干扰其内部测试
+        # 只指定交叉编译目标
+        # =================================================
+        ./configure --host=x86_64-w64-mingw32
 
     - name: Build Axel
       shell: msys2 {0}
       run: |
         cd axel-src
-        make -j$(nproc)
+        
+        # ==================== 核心改动 ====================
+        # 在 make 阶段传入所有编译和链接标志
+        # =================================================
+        make -j$(nproc) \
+          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
+          LIBS="-lws2_32 -lssl -lcrypto"
 
     - name: Verify binary
       shell: cmd
