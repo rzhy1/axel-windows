@@ -46,18 +46,19 @@ jobs:
         # 删除 Windows 不存在的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
+        sed -i '/netinet\/in.h/d' configure.ac
 
         # 移除 gettext 宏，避免 autopoint 冲突
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        # 添加 Windows 兼容宏，包括 O_NONBLOCK
+        # 添加 Windows 兼容宏，包括 O_NONBLOCK 和缺失头文件
         {
           echo ''
           echo '# --- Windows Compatibility (added by CI) ---'
           echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
           echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
-          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])'
+          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])'
           echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
           echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
           echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
@@ -75,10 +76,10 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除缓存，确保 CV 变量生效
+        # 删除缓存，保证 CV 变量生效
         rm -f config.cache config.log
 
-        # 设置所有标准头文件和函数 CV 变量
+        # 设置 POSIX 头文件 CV 变量
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
         export ac_cv_header_sys_ioctl_h=yes
@@ -88,6 +89,7 @@ jobs:
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
 
+        # 设置标准 C 函数 CV 变量
         export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
@@ -112,8 +114,7 @@ jobs:
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
 
-        # configure 在 Windows 下直接使用宏绕过 O_NONBLOCK
-        # 无需再设置 ac_cv_macro_O_NONBLOCK
+        # configure 直接使用宏绕过 O_NONBLOCK，无需 CV 变量
 
         ./configure \
           --host=x86_64-w64-mingw32 \
