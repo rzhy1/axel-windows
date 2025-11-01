@@ -50,10 +50,8 @@ jobs:
         sed -i '/AX_GCC_BUILTIN/d' configure.ac
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
-        # ==================== 核心改动 ====================
         # 只删除对古老 gettext 版本的硬性要求，解决 autopoint 错误
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
-        # =================================================
 
         # 添加 Windows 兼容宏，绕过标准函数检查
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
@@ -68,6 +66,12 @@ jobs:
       shell: msys2 {0}
       run: |
         cd axel-src
+        
+        # ==================== 核心改动 ====================
+        # 在 autoreconf 之前手动运行 libtoolize，强制创建缺失的辅助脚本 (如 config.rpath)
+        libtoolize --force --copy
+        # =================================================
+        
         autoreconf -fi
 
     - name: Configure for Windows build
