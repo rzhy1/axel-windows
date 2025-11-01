@@ -38,20 +38,20 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility fix and skip unistd.h
+    - name: Apply Windows compatibility fix
       shell: msys2 {0}
       run: |
         cd axel-src
 
-        echo "🔧 删除 arpa/inet.h 和 unistd.h 检查行..."
+        # 删除 arpa/inet.h 和 unistd.h 检查行
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
 
-        echo "🚫 移除 gettext 宏，避免 autopoint 版本冲突..."
+        # 移除 gettext 宏，避免 autopoint 冲突
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        echo "🧩 添加 Windows 兼容定义..."
+        # 添加 Windows 兼容宏
         {
           echo ''
           echo '# --- Windows Compatibility (added by CI) ---'
@@ -74,7 +74,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 强制 configure 认为缺失的 POSIX 头文件和函数存在/不存在
+        # 设置所有 POSIX 头文件和函数 CV 变量
         export ac_cv_header_arpa_inet_h=no
         export ac_cv_header_netinet_in_h=yes
         export ac_cv_header_netdb_h=yes
@@ -86,13 +86,15 @@ jobs:
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
         export ac_cv_header_unistd_h=no
+
+        export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
+        export ac_cv_func_socket=yes
+        export ac_cv_func_select=yes
         export ac_cv_func_malloc=yes
         export ac_cv_func_memset=yes
         export ac_cv_func_realloc=yes
-        export ac_cv_func_select=yes
-        export ac_cv_func_socket=yes
         export ac_cv_func_strerror=yes
         export ac_cv_func_strcasecmp=yes
         export ac_cv_func_strncasecmp=yes
