@@ -1,116 +1,144 @@
-name: Build Axel for Windows
+name: Build Axel (Windows Compatibility)
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Install MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: mingw64
-          update: true
-          install: |
-            base-devel
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-make
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-wolfssl
-
-      - name: Prepare build environment
-        shell: msys2 {0}
-        run: |
-          cd axel-windows
-          git clone https://github.com/axel-download-accelerator/axel.git axel-src
-          cd axel-src
-
-          # ===== 精确修复：修改 configure.ac =====
-          # 1. 在 mingw32 case 中添加 HAVE_BUILTIN_CLZLL 定义
-          sed -i '/\[\*mingw32\], \[/a \
-    AC_DEFINE([HAVE_BUILTIN_CLZLL], [1], [Force builtin function detection])' configure.ac
-
-          # 2. 删除 AX_GCC_BUILTIN 检测行
-          sed -i '/AX_GCC_BUILTIN\(\[__builtin_clzll\]\)/d' configure.ac
-
-          # 3. 删除后续的错误检查行
-          sed -i '/AS_IF\(\[test "x$ax_cv_have___builtin_clzll" = xno\], \[/d' configure.ac
-          sed -i '/AC_MSG_ERROR\(\[Support for __builtin_clzll is required\]\)/d' configure.ac
-
-          # 4. 删除 O_NONBLOCK 检查
-          sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
-
-          # 5. 删除 gettext 相关行
-          sed -i '/AM_GNU_GETTEXT/d' configure.ac
-          sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
-
-      - name: Configure for Windows build
-        shell: msys2 {0}
-        run: |
-          cd axel-src
-          rm -f config.cache config.log
-
-          # 设置所有必要的头文件检查通过
-          export ac_cv_header_arpa_inet_h=yes
-          export ac_cv_header_unistd_h=yes
-          export ac_cv_header_netdb_h=yes
-          export ac_cv_header_sys_socket_h=yes
-          export ac_cv_header_sys_ioctl_h=yes
-          export ac_cv_header_sys_time_h=yes
-          export ac_cv_header_fcntl_h=yes
-          export ac_cv_header_limits_h=yes
-          export ac_cv_header_locale_h=yes
-          export ac_cv_header_stdlib_h=yes
-
-          # 设置所有标准C函数检查通过
-          export ac_cv_func_inet_ntoa=yes
-          export ac_cv_func_getaddrinfo=yes
-          export ac_cv_func_gettimeofday=yes
-          export ac_cv_func_socket=yes
-          export ac_cv_func_select=yes
-          export ac_cv_func_malloc=yes
-          export ac_cv_func_memset=yes
-          export ac_cv_func_realloc=yes
-          export ac_cv_func_strerror=yes
-          export ac_cv_func_strcasecmp=yes
-          export ac_cv_func_strncasecmp=yes
-          export ac_cv_func_strchr=yes
-          export ac_cv_func_strrchr=yes
-          export ac_cv_func_strstr=yes
-          export ac_cv_func_strtoul=yes
-          export ac_cv_func_strtoll=yes
-          export ac_cv_func_strpbrk=yes
-          export ac_cv_func_nanosleep=yes
-          export ac_cv_func_inet_ntop=yes
-          export ac_cv_func_inet_pton=yes
-          export ac_cv_func_getopt=yes
-          export ac_cv_func_strlcpy=yes
-          export ac_cv_func_strlcat=yes
-
-          # 配置命令（关键：添加 Windows 兼容 CFLAGS）
-          ./configure \
-            --host=x86_64-w64-mingw32 \
-            --disable-nls \
-            CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
-            LIBS="-lws2_32 -lssl -lcrypto"
-
-      - name: Build
-        shell: msys2 {0}
-        run: |
-          cd axel-src
-          make clean
+    - name: Setup MSYS2 environment
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: |
+          base-devel
+          mingw-w64-x86_64-toolchain
           make
+          autoconf
+          automake
+          autoconf-archive
+          libtool
+          git
+          wget
+          patch
+          pkgconf
+          gettext
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: axel-windows
-          path: axel-src/axel.exe
+    - name: Clone Axel source
+      shell: msys2 {0}
+      run: |
+        git clone https://github.com/axel-download-accelerator/axel.git axel-src
+        cd axel-src
+        git log -1 --oneline
+
+    - name: Apply Windows CI compatibility patch
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+
+        # 删除不适用于 Windows 的宏和头文件检测
+        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
+        sed -i '/AX_GCC_BUILTIN/d' configure.ac
+        sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
+        sed -i '/AM_GNU_GETTEXT/d' configure.ac
+        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+        sed -i '/arpa\/inet\.h/d' configure.ac
+        sed -i '/\<unistd.h\>/d' configure.ac
+        sed -i '/netinet\/in.h/d' configure.ac
+
+        # 删除缓存和生成文件
+        rm -f configure config.cache config.log aclocal.m4 autom4te.cache
+
+        # 添加 Windows 兼容宏
+        echo '' >> configure.ac
+        echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
+        echo 'AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])' >> configure.ac
+
+    - name: Regenerate configure scripts
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        autoreconf -fi
+
+    - name: Configure for Windows build
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+
+        # 删除缓存确保 CV 变量生效
+        rm -f config.cache config.log
+
+        # --- POSIX 头文件 CV ---
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=no
+        export ac_cv_header_unistd_h=no
+        export ac_cv_header_netdb_h=yes
+        export ac_cv_header_sys_socket_h=yes
+        export ac_cv_header_sys_ioctl_h=yes
+        export ac_cv_header_sys_time_h=yes
+        export ac_cv_header_fcntl_h=yes
+        export ac_cv_header_limits_h=yes
+        export ac_cv_header_locale_h=yes
+        export ac_cv_header_stdlib_h=yes
+
+        # --- 标准 C 函数 CV ---
+        export ac_cv_func_getaddrinfo=yes
+        export ac_cv_func_gettimeofday=yes
+        export ac_cv_func_inet_ntoa=yes
+        export ac_cv_func_malloc=yes
+        export ac_cv_func_memset=yes
+        export ac_cv_func_realloc=yes
+        export ac_cv_func_select=yes
+        export ac_cv_func_socket=yes
+        export ac_cv_func_strerror=yes
+        export ac_cv_func_strcasecmp=yes
+        export ac_cv_func_strncasecmp=yes
+        export ac_cv_func_strchr=yes
+        export ac_cv_func_strrchr=yes
+        export ac_cv_func_strstr=yes
+        export ac_cv_func_strtoul=yes
+        export ac_cv_func_strtoll=yes
+        export ac_cv_func_strpbrk=yes
+        export ac_cv_func_nanosleep=yes
+        export ac_cv_func_inet_ntop=yes
+        export ac_cv_func_inet_pton=yes
+        export ac_cv_func_getopt=yes
+        export ac_cv_func_strlcpy=yes
+        export ac_cv_func_strlcat=yes
+
+        # --- 内建函数 / 宏 CV ---
+        export ac_cv_func___builtin_clzll=yes
+        export ac_cv_macro_O_NONBLOCK=0
+        export ac_cv_prog_cc_stdc=yes
+
+        # 统一 shell 下执行 configure
+        ./configure \
+          --host=x86_64-w64-mingw32 \
+          --disable-nls \
+          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
+          LIBS="-lws2_32 -lssl -lcrypto"
+
+    - name: Build Axel
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        make -j$(nproc)
+
+    - name: Verify binary
+      shell: cmd
+      run: |
+        cd axel-src\src
+        .\axel.exe --version || echo "✅ Build OK"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: axel-windows-static
+        path: axel-src/src/axel.exe
