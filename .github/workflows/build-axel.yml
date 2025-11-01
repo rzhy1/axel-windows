@@ -49,18 +49,32 @@ jobs:
         sed -i '/#include <netinet\/in.h>/a #endif' src/axel.h
         
         # --- Autotools 配置脚本生成补丁 ---
+        # 1. 彻底移除所有有问题的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/netinet\/in\.h/d' configure.ac
         sed -i '/unistd\.h/d' configure.ac
         sed -i '/netdb\.h/d' configure.ac
         sed -i '/sys\/ioctl\.h/d' configure.ac
         sed -i '/sys\/socket\.h/d' configure.ac
+        
+        # 2. 彻底移除 O_NONBLOCK 宏的检查，避免其报错
+        sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
+
+        # 3. 移除导致 configure 语法错误的多行 _WIN32_WINNT 定义
         sed -i '/AC_DEFINE(\[_WIN32_WINNT\]/{N;d;}' configure.ac
+
+        # 4. 从构建中彻底移除 po 目录和 Gettext 宏
         sed -i 's/ po//' Makefile.am
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i "s|po/Makefile.in||" configure.ac
+        
+        # 5. 正确集成 Libtool
         sed -i '/AM_INIT_AUTOMAKE/a LT_INIT' configure.ac
         echo 'ACLOCAL_AMFLAGS = -I m4' | cat - Makefile.am > temp && mv temp Makefile.am
+
+        # 6. 为 Windows 添加一个假的 O_NONBLOCK 定义，以满足脚本逻辑
+        echo 'AS_IF([echo "$host_os" | grep -qi mingw], [AC_DEFINE([O_NONBLOCK], [0], [Fake O_NONBLOCK for Windows])])' >> configure.ac
+
 
     - name: Regenerate configure scripts
       shell: msys2 {0}
@@ -82,8 +96,7 @@ jobs:
 
         rm -f config.cache config.log
         
-        # ==================== 核心改动 ====================
-        # 为所有 autoconf 检查的函数提供缓存变量，以绕过在交叉编译时会失败的链接检查
+        # 为所有 autoconf 检查的函数提供缓存变量
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
         export ac_cv_func_inet_ntoa=yes
@@ -103,6 +116,10 @@ jobs:
         export ac_cv_func_strstr=yes
         export ac_cv_func_strtoul=yes
         export ac_cv_func_strtoll=yes
+
+        # ==================== 核心改动 ====================
+        # 为 O_NONBLOCK 宏检查提供缓存变量，告诉 configure 它“存在”
+        export ax_cv_macro_O_NONBLOCK=yes
         # =================================================
 
         ./configure \
