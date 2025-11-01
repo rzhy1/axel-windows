@@ -43,7 +43,7 @@ jobs:
         cd axel-src
 
         # --- C 语言级别编译补丁 ---
-        # 1. 为 Windows 系统条件性地排除 POSIX 独有的头文件，避免编译失败
+        # 1. 为 Windows 系统条件性地排除 POSIX 独有的头文件
         sed -i '/#include <netinet\/in_systm.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in_systm.h>/a #endif' src/axel.h
         sed -i '/#include <netinet\/in.h>/i #ifndef WIN32' src/axel.h
@@ -51,24 +51,22 @@ jobs:
         
         # --- Autotools 配置脚本生成补丁 ---
         # ==================== 核心改动 ====================
-        # 2. 从 configure.ac 的检查列表中彻底移除 Windows 上不存在的头文件，从根源上解决 "is required" 错误
+        # 2. 从 configure.ac 的检查列表中彻底移除所有在 MinGW 下会出问题的头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/netinet\/in\.h/d' configure.ac
         sed -i '/unistd\.h/d' configure.ac
+        sed -i '/netdb\.h/d' configure.ac # <-- 新增的修复！
         # =================================================
 
         # 3. 移除导致 configure 语法错误的多行 _WIN32_WINNT 定义
         sed -i '/AC_DEFINE(\[_WIN32_WINNT\]/{N;d;}' configure.ac
 
-        # 4. 从构建中彻底移除 doc 和 po 目录，解决 txt2man 和 gettext 的问题
-        sed -i 's/ doc//' Makefile.am
+        # 4. 从构建中彻底移除 po 目录和 Gettext 宏
         sed -i 's/ po//' Makefile.am
-
-        # 5. 移除 Gettext 宏
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i "s|po/Makefile.in||" configure.ac
         
-        # 6. 正确集成 Libtool
+        # 5. 正确集成 Libtool
         sed -i '/AM_INIT_AUTOMAKE/a LT_INIT' configure.ac
         echo 'ACLOCAL_AMFLAGS = -I m4' | cat - Makefile.am > temp && mv temp Makefile.am
 
@@ -93,13 +91,10 @@ jobs:
 
         rm -f config.cache config.log
         
-        # 虽然我们已经从 configure.ac 中移除了检查，但保留这些缓存变量是无害的，作为双重保险
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=no
-        export ac_cv_header_unistd_h=no
-        
+        # 使用项目官方提供的 --disable-doc 选项来禁用文档生成
         ./configure \
-          --host=x86_64-w64-mingw32
+          --host=x86_64-w64-mingw32 \
+          --disable-doc
 
     - name: Build Axel
       shell: msys2 {0}
