@@ -43,50 +43,44 @@ jobs:
       run: |
         cd axel-src
 
-        # ===== 修复关键：提前添加 Windows 兼容宏 =====
-        # 在 configure.ac 开头插入 Windows 兼容定义
-        {
-          echo '# --- Windows Compatibility (added by CI) ---'
-          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
-          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
-          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])'
-          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
-          echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
-          echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
-          echo '  # Disable GCC builtin checks on Windows'
-          echo '  AC_DEFINE([HAVE_BUILTIN_CLZLL], [1], [Force builtin function detection])'
-          echo '])'
-        } | cat - configure.ac > temp && mv temp configure.ac
-
-        # ===== 修复关键：彻底禁用 GCC 内置函数检测 =====
-        sed -i '/AX_GCC_BUILTIN/d' configure.ac
-        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
-
-        # 删除 Windows 不存在的头文件检查
+        # 删除 Windows 不存在的头文件和 AX_GCC 检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
         sed -i '/netinet\/in.h/d' configure.ac
-
-        # 删除 O_NONBLOCK 检查
+        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
+        sed -i '/AX_GCC_BUILTIN/d' configure.ac
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
-        # 删除 gettext 宏
+        # 移除 gettext 宏，避免 autopoint 冲突
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-    - name: Regenerate configure scripts
+        # 添加 Windows 兼容宏
+        echo '' >> configure.ac
+        echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
+        echo 'AS_IF([echo "$host_os" | grep -qi mingw], [' >> configure.ac
+        echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])' >> configure.ac
+        echo '])' >> configure.ac
+
+    - name: Clean and regenerate configure scripts
       shell: msys2 {0}
       run: |
         cd axel-src
+        rm -f configure config.cache config.log aclocal.m4 autom4te.cache
         autoreconf -fi
 
     - name: Configure for Windows build
       shell: msys2 {0}
       run: |
         cd axel-src
-        rm -f config.cache config.log
 
-        # POSIX 头文件 CV 变量 (保持原样)
+        # 强制 configure 认为缺失的 POSIX 头文件存在/不存在
+        export ac_cv_header_arpa_inet_h=no
+        export ac_cv_header_netinet_in_h=no
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
         export ac_cv_header_sys_ioctl_h=yes
@@ -95,8 +89,9 @@ jobs:
         export ac_cv_header_limits_h=yes
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
+        export ac_cv_header_unistd_h=no
 
-        # 标准 C 函数 CV 变量 (保持原样)
+        # 强制 configure 认为标准 C 函数可用
         export ac_cv_func_inet_ntoa=yes
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
@@ -121,11 +116,13 @@ jobs:
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
 
-        # ===== 修复关键：添加 MinGW 专用 CFLAGS =====
+        # 绕过 AXEL_CHECK_MACRO 宏
+        export ac_cv_macro_O_NONBLOCK=0
+
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h -DHAVE_BUILTIN_CLZLL=1" \
+          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
 
     - name: Build Axel
