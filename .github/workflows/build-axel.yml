@@ -56,17 +56,15 @@ jobs:
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
         # 添加 Windows 兼容宏
-        {
-          echo ''
-          echo '# --- Windows Compatibility (added by CI) ---'
-          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
-          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
-          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])'
-          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
-          echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
-          echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
-          echo '])'
-        } >> configure.ac
+        echo '' >> configure.ac
+        echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
+        echo 'AS_IF([echo "$host_os" | grep -qi mingw], [' >> configure.ac
+        echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])' >> configure.ac
+        echo '])' >> configure.ac
 
     - name: Regenerate configure scripts
       shell: msys2 {0}
@@ -78,8 +76,6 @@ jobs:
       shell: msys2 {0}
       run: |
         cd axel-src
-
-        # 删除 configure 缓存，确保 CV 变量生效
         rm -f config.cache config.log
 
         # --------------------------
@@ -123,11 +119,13 @@ jobs:
         export ax_cv_have___builtin_clzll=yes
         export ax_cv_have_gcc_format_attribute=yes
 
-        # --------------------------
+        # 所有 AXEL_CHECK_MACRO 检测绕过
+        export ax_cv_o_nonblock=0
+
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
+          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
 
     - name: Build Axel
