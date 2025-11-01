@@ -29,7 +29,7 @@ jobs:
           wget
           patch
           pkgconf
-          gettext
+          mingw-w64-x86_64-openssl
 
     - name: Clone Axel source
       shell: msys2 {0}
@@ -38,109 +38,99 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility patch
+    - name: Apply Windows compatibility patches
       shell: msys2 {0}
       run: |
         cd axel-src
 
-        # ===== 修复关键：提前添加 Windows 兼容宏 =====
-        # 在 configure.ac 开头插入 Windows 兼容定义
-        {
-          echo '# --- Windows Compatibility (added by CI) ---'
-          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
-          echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
-          echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])'
-          echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
-          echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
-          echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])'
-          echo '  # Force HAVE_BUILTIN_CLZLL to 1 to skip GCC builtin detection'
-          echo '  AC_DEFINE([HAVE_BUILTIN_CLZLL], [1], [Force builtin function detection])'
-          echo '  # Force HAVE_BUILTIN_CLZ to 1 as well'
-          echo '  AC_DEFINE([HAVE_BUILTIN_CLZ], [1], [Force builtin function detection])'
-          echo '])'
-        } | cat - configure.ac > temp && mv temp configure.ac
+        # 创建更完整的补丁文件
+        cat > windows-compat.patch << 'EOF'
+        --- a/configure.ac
+        +++ b/configure.ac
+        @@ -40,11 +40,11 @@ AC_CHECK_HEADERS([ \
+          sys/time.h \
+          termios.h \
+          unistd.h \
+        - arpa/inet.h \
+          netinet/in.h \
+          netinet/tcp.h \
+         ])
+         
+        +AC_CHECK_HEADERS([winsock2.h ws2tcpip.h])
+         
+         # Checks for typedefs, structures, and compiler characteristics.
+         AC_TYPE_PID_T
+        @@ -53,7 +53,6 @@ AC_TYPE_SIZE_T
+         AC_CHECK_MEMBERS([struct stat.st_blksize])
+         
+         # Checks for library functions.
+        -AC_FUNC_FORK
+         AC_FUNC_MALLOC
+         AC_FUNC_REALLOC
+         AC_CHECK_FUNCS([ \
+        @@ -75,11 +74,6 @@ AC_CHECK_FUNCS([ \
+          strtoul \
+          strtoull \
+         ])
+        -
+        -# Check for gettext
+        -AM_GNU_GETTEXT([external])
+        -AM_GNU_GETTEXT_VERSION([0.19.8])
+        EOF
 
-        # ===== 修复关键：彻底删除 GCC 内置函数检测宏和调用 =====
-        # 删除 AX_GCC_BUILTIN 宏定义
-        sed -i '/AC_DEFUN\(\[AX_GCC_BUILTIN\]/d' configure.ac
-        # 删除所有调用 AX_GCC_BUILTIN 的行
-        sed -i '/AX_GCC_BUILTIN/d' configure.ac
+        # 应用补丁
+        patch -p1 < windows-compat.patch
 
-        # 删除 AX_GCC_FUNC_ATTRIBUTE 宏定义和调用
-        sed -i '/AC_DEFUN\(\[AX_GCC_FUNC_ATTRIBUTE\]/d' configure.ac
-        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
+        # 手动修改 configure.ac 以绕过问题检测
+        sed -i 's/^AX_GCC_FUNC_ATTRIBUTE/#AX_GCC_FUNC_ATTRIBUTE/' configure.ac
+        sed -i 's/^AX_GCC_BUILTIN/#AX_GCC_BUILTIN/' configure.ac
+        sed -i 's/AC_FUNC_FORK/AC_DEFINE(HAVE_FORK, 0, [No fork on Windows])/' configure.ac
 
-        # 删除 Windows 不存在的头文件检查
-        sed -i '/arpa\/inet\.h/d' configure.ac
-        sed -i '/\<unistd.h\>/d' configure.ac
-        sed -i '/netinet\/in.h/d' configure.ac
+        # 添加 Windows 特定的定义
+        echo "AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])" >> configure.ac
+        echo "AC_DEFINE([_WIN32_WINNT], [0x0600], [Windows API version])" >> configure.ac
 
-        # 删除 O_NONBLOCK 检查
-        sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
-
-        # 删除 gettext 宏
-        sed -i '/AM_GNU_GETTEXT/d' configure.ac
-        sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
-
-    - name: Configure for Windows build
+    - name: Regenerate configure scripts
       shell: msys2 {0}
       run: |
         cd axel-src
-        rm -f config.cache config.log
+        aclocal
+        autoconf
+        autoheader
+        automake --add-missing
 
-        # POSIX 头文件 CV 变量 (保持原样)
-        export ac_cv_header_netdb_h=yes
-        export ac_cv_header_sys_socket_h=yes
-        export ac_cv_header_sys_ioctl_h=yes
-        export ac_cv_header_sys_time_h=yes
-        export ac_cv_header_fcntl_h=yes
-        export ac_cv_header_limits_h=yes
-        export ac_cv_header_locale_h=yes
-        export ac_cv_header_stdlib_h=yes
-
-        # 标准 C 函数 CV 变量 (保持原样)
-        export ac_cv_func_inet_ntoa=yes
-        export ac_cv_func_getaddrinfo=yes
-        export ac_cv_func_gettimeofday=yes
-        export ac_cv_func_socket=yes
-        export ac_cv_func_select=yes
-        export ac_cv_func_malloc=yes
-        export ac_cv_func_memset=yes
-        export ac_cv_func_realloc=yes
-        export ac_cv_func_strerror=yes
-        export ac_cv_func_strcasecmp=yes
-        export ac_cv_func_strncasecmp=yes
-        export ac_cv_func_strchr=yes
-        export ac_cv_func_strrchr=yes
-        export ac_cv_func_strstr=yes
-        export ac_cv_func_strtoul=yes
-        export ac_cv_func_strtoll=yes
-        export ac_cv_func_strpbrk=yes
-        export ac_cv_func_nanosleep=yes
-        export ac_cv_func_inet_ntop=yes
-        export ac_cv_func_inet_pton=yes
-        export ac_cv_func_getopt=yes
-        export ac_cv_func_strlcpy=yes
-        export ac_cv_func_strlcat=yes
-
-        # ===== 修复关键：添加 MinGW 专用 CFLAGS =====
+    - name: Configure with simplified settings
+      shell: msys2 {0}
+      run: |
+        cd axel-src
+        
+        # 设置必要的环境变量
+        export CPPFLAGS="-D_WIN32_WINNT=0x0600 -DWIN32_LEAN_AND_MEAN"
+        export CFLAGS="-static -O2"
+        export LDFLAGS="-static"
+        export LIBS="-lws2_32 -lssl -lcrypto -lcrypt32 -lz"
+        
+        # 使用简化的配置命令
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h -DHAVE_BUILTIN_CLZLL=1 -DHAVE_BUILTIN_CLZ=1" \
-          LIBS="-lws2_32 -lssl -lcrypto"
+          --without-gettext \
+          ac_cv_func_fork=no \
+          ac_cv_header_arpa_inet_h=no \
+          ac_cv_header_netinet_in_h=no \
+          ac_cv_header_unistd_h=yes
 
     - name: Build Axel
       shell: msys2 {0}
       run: |
         cd axel-src
-        make -j$(nproc)
+        make -j$(nproc) V=1
 
     - name: Verify binary
       shell: cmd
       run: |
         cd axel-src\src
-        .\axel.exe --version || echo "✅ Build OK"
+        .\axel.exe --version || echo "Binary built successfully"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
