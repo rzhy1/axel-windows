@@ -41,8 +41,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 创建简化版 configure.ac 补丁
-        cat > simple-fix.patch << 'EOF'
+        cat > simple-fix.patch << EOF
 --- a/configure.ac
 +++ b/configure.ac
 @@ -42,7 +42,6 @@ AC_CHECK_HEADERS([ \
@@ -52,6 +51,7 @@ jobs:
 -	arpa/inet.h \
  ])
  
+ # 在文件末尾添加Windows兼容性定义
 @@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \
  # Windows兼容性
  if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then
@@ -60,9 +60,10 @@ jobs:
 +else
 +  AC_CHECK_HEADERS([arpa/inet.h])
  fi
- EOF
+EOF
 
         patch -p1 < simple-fix.patch
+
         
     - name: Regenerate configure scripts
       shell: msys2 {0}
