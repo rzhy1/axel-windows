@@ -140,8 +140,7 @@ jobs:
         export ac_cv_func___builtin_clzll=yes
         export ac_cv_prog_cc_undeclared_builtins=no
 
-        ./configure \
-          --host=x86_64-w64-mingw32
+        ./configure --disable-doc --host=x86_64-w64-mingw32
 
     - name: Build Axel
       shell: msys2 {0}
