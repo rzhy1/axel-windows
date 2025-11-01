@@ -42,31 +42,27 @@ jobs:
       run: |
         cd axel-src
 
-        # ==================== 最终修复补丁集 (1/3) ====================
         # --- 修复 C 语言级别的编译错误 ---
-
         # 1. 修复致命错误：通过条件编译移除 Windows 上不存在的 POSIX 头文件
         sed -i '/#include <netinet\/in_systm.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in_systm.h>/a #endif' src/axel.h
         
-        # 2. 修复宏重定义错误：注释掉 configure.ac 中重复的 _WIN32_WINNT 定义
-        sed -i "s|AC_DEFINE(\[_WIN32_WINNT\].*|# &|" configure.ac
+        # ==================== 核心改动 ====================
+        # 2. 修复 configure 语法错误：彻底删除 configure.ac 中导致问题的多行 _WIN32_WINNT 定义块
+        sed -i '/AC_DEFINE(\[_WIN32_WINNT\]/{N;d;}' configure.ac
+        # =================================================
 
-        # 3. 修复 txt2man 错误：从构建中彻底移除 doc 目录，不再生成手册页
+        # 3. 修复 txt2man 错误：从构建中彻底移除 doc 目录
         sed -i 's/SUBDIRS = src lib doc/SUBDIRS = src lib/' Makefile.am
 
-        # ==================== Autotools 修复补丁 (2/3) ====================
-        # 从构建脚本生成阶段彻底移除 Gettext/NLS
+        # --- Autotools 修复补丁 ---
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i "s|po/Makefile.in||" configure.ac
         sed -i "s|po||" Makefile.am
-        
-        # 集成 Libtool 所需的补丁
         sed -i '/AM_INIT_AUTOMAKE/a LT_INIT' configure.ac
         echo 'ACLOCAL_AMFLAGS = -I m4' | cat - Makefile.am > temp && mv temp Makefile.am
 
-        # ==================== 兼容性修复补丁 (3/3) ====================
-        # 通用 POSIX 兼容性
+        # --- 兼容性修复补丁 ---
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/netinet\/in.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
@@ -74,13 +70,12 @@ jobs:
         sed -i '/AX_GCC_BUILTIN/d' configure.ac
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
         
-        # Windows 特定的兼容性宏定义
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
         echo 'AS_IF([echo "$host_os" | grep -qi mingw], [' >> configure.ac
-        echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])' >> configure.ac
-        echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])' >> configure.ac
-        echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])' >> configure.ac
-        echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_ARPA_INET_H],, [No arpa/inet.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_NETINET_IN_H],, [No netinet/in.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([HAVE_UNISTD_H],, [No unistd.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([O_NONBLOCK],, [Define to 0 on Windows])' >> configure.ac
         echo '])' >> configure.ac
 
     - name: Regenerate configure scripts
@@ -98,15 +93,12 @@ jobs:
       run: |
         cd axel-src
         
-        # 更新 config.sub/guess 以识别现代操作系统
         wget -O build-aux/config.sub "http://git.savannah.gnu.org/cgit/config.git/plain/config.sub"
         wget -O build-aux/config.guess "http://git.savannah.gnu.org/cgit/config.git/plain/config.guess"
 
         rm -f config.cache config.log
         
-        # 导出所有缓存变量以绕过 configure 检查
         export ac_cv_header_arpa_inet_h=no
-        # ... (所有其他 export 变量保持不变，此处省略以保持简洁)
         export ac_cv_header_netinet_in_h=no
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
@@ -153,7 +145,7 @@ jobs:
         cd axel-src
         make -j$(nproc) \
           CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
-          LIBS="-lws2_32"
+          LIBS="-lws2_32 -lssl -lcrypto"
 
     - name: Verify binary
       shell: cmd
