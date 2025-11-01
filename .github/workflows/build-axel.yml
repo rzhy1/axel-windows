@@ -38,12 +38,12 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility fix
+    - name: Apply Windows compatibility patch
       shell: msys2 {0}
       run: |
         cd axel-src
 
-        # 删除导致 Windows 报错的头文件检查
+        # 删除 Windows 下不存在的 POSIX 头文件检查
         sed -i '/arpa\/inet\.h/d' configure.ac
         sed -i '/\<unistd.h\>/d' configure.ac
 
@@ -74,10 +74,10 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除旧缓存
+        # 删除 configure 缓存
         rm -f config.cache config.log
 
-        # 在同一个 shell 中导出所有 POSIX 头文件、函数和宏的 CV 变量并执行 configure
+        # 一次性设置所有 POSIX 头文件、函数、宏的 CV 变量并执行 configure
         ac_cv_header_arpa_inet_h=no \
         ac_cv_header_netinet_in_h=yes \
         ac_cv_header_netdb_h=yes \
@@ -110,6 +110,8 @@ jobs:
         ac_cv_func_inet_ntop=yes \
         ac_cv_func_inet_pton=yes \
         ac_cv_func_getopt=yes \
+        ac_cv_func_strlcpy=yes \
+        ac_cv_func_strlcat=yes \
         ac_cv_macro_O_NONBLOCK=yes \
         ./configure \
           --host=x86_64-w64-mingw32 \
