@@ -90,16 +90,13 @@ EOF
       shell: msys2 {0}
       run: |
         cd axel-src
-        # 为Windows进行配置
-        # LDFLAGS="-static" 确保生成一个静态链接的exe，减少依赖
-        # LIBS 添加了-lws2_32 以链接Winsock库
+        
         ./configure \
           --host=x86_64-w64-mingw32 \
-          --prefix=/mingw64 \
           --disable-nls \
-          CFLAGS="-O2 -pipe" \
-          LDFLAGS="-static" \
+          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
+
           
     - name: Build axel
       shell: msys2 {0}
