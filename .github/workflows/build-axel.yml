@@ -38,7 +38,7 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Patch configure.ac for Windows
+    - name: Apply Windows compatibility patch
       shell: msys2 {0}
       run: |
         cd axel-src
@@ -48,16 +48,16 @@ jobs:
         sed -i '/\<unistd.h\>/d' configure.ac
         sed -i '/netinet\/in.h/d' configure.ac
 
-        # 删除 O_NONBLOCK 检查宏
+        # 删除 O_NONBLOCK 检查
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
-        # 注释掉 AX_GCC 宏，避免 Windows 下报错
-        sed -i 's/^AX_GCC_FUNC_ATTRIBUTE/#AX_GCC_FUNC_ATTRIBUTE/' configure.ac
-        sed -i 's/^AX_GCC_BUILTIN/#AX_GCC_BUILTIN/' configure.ac
-
-        # 移除 gettext 宏，避免 autopoint 冲突
+        # 删除 gettext 宏，避免 autopoint 冲突
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
+
+        # 注释掉 GCC 内建检测宏，绕过 __builtin_clzll / format
+        sed -i 's/^AX_GCC_FUNC_ATTRIBUTE/#AX_GCC_FUNC_ATTRIBUTE/' configure.ac
+        sed -i 's/^AX_GCC_BUILTIN/#AX_GCC_BUILTIN/' configure.ac
 
         # 添加 Windows 兼容宏
         {
@@ -83,12 +83,10 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除缓存
+        # 删除缓存，确保 CV 变量生效
         rm -f config.cache config.log
 
         # POSIX 头文件 CV 变量
-        export ac_cv_header_arpa_inet_h=no
-        export ac_cv_header_netinet_in_h=no
         export ac_cv_header_netdb_h=yes
         export ac_cv_header_sys_socket_h=yes
         export ac_cv_header_sys_ioctl_h=yes
@@ -97,7 +95,6 @@ jobs:
         export ac_cv_header_limits_h=yes
         export ac_cv_header_locale_h=yes
         export ac_cv_header_stdlib_h=yes
-        export ac_cv_header_unistd_h=no
 
         # 标准 C 函数 CV 变量
         export ac_cv_func_inet_ntoa=yes
@@ -124,12 +121,7 @@ jobs:
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
 
-        # 内建函数 CV 变量
-        export ac_cv_func___builtin_clzll=yes
-        export ac_cv_func___builtin_expect=yes
-        export ac_cv_func___builtin_popcount=yes
-
-        # 宏 CV 变量
+        # 定义缺失宏
         export ac_cv_macro_O_NONBLOCK=0
 
         ./configure \
