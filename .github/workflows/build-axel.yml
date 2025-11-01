@@ -56,7 +56,8 @@ jobs:
         sed -i '/netinet\/in\.h/d' configure.ac
         sed -i '/unistd\.h/d' configure.ac
         sed -i '/netdb\.h/d' configure.ac
-        sed -i '/sys\/ioctl\.h/d' configure.ac # <-- 新增的修复！
+        sed -i '/sys\/ioctl\.h/d' configure.ac
+        sed -i '/sys\/socket\.h/d' configure.ac # <-- 新增的修复！
         # =================================================
 
         # 3. 移除导致 configure 语法错误的多行 _WIN32_WINNT 定义
