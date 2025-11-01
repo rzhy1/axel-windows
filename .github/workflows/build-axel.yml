@@ -55,9 +55,10 @@ jobs:
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        # 注释掉 GCC 内建检测宏，绕过 __builtin_clzll / format
-        sed -i 's/^AX_GCC_FUNC_ATTRIBUTE/#AX_GCC_FUNC_ATTRIBUTE/' configure.ac
-        sed -i 's/^AX_GCC_BUILTIN/#AX_GCC_BUILTIN/' configure.ac
+        # 删除
+        sed -i '/AX_GCC_FUNC_ATTRIBUTE/d' configure.ac
+        sed -i '/AX_GCC_BUILTIN/d' configure.ac
+
 
         # 添加 Windows 兼容宏
         {
