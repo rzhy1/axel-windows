@@ -38,13 +38,14 @@ jobs:
         cd axel-src
         git log -1 --oneline
 
-    - name: Apply Windows compatibility fix
+    - name: Apply Windows compatibility fix and skip unistd.h
       shell: msys2 {0}
       run: |
         cd axel-src
 
-        echo "🔧 删除 arpa/inet.h 检查行..."
+        echo "🔧 删除 arpa/inet.h 和 unistd.h 检查行..."
         sed -i '/arpa\/inet\.h/d' configure.ac
+        sed -i '/\<unistd.h\>/d' configure.ac
 
         echo "🚫 移除 gettext 宏，避免 autopoint 版本冲突..."
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
@@ -58,17 +59,7 @@ jobs:
           echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])'
           echo '  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])'
           echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])'
-          echo '])'
-        } >> configure.ac
-
-        echo "🧩 跳过 Windows 下 unistd.h 检查..."
-        {
-          echo ''
-          echo '# --- Skip unistd.h on Windows (added by CI) ---'
-          echo 'AS_IF([echo "$host_os" | grep -qi mingw], ['
           echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])'
-          echo '], ['
-          echo '  AC_CHECK_HEADERS([unistd.h],, [AC_MSG_ERROR([$ac_header is required.])])'
           echo '])'
         } >> configure.ac
 
