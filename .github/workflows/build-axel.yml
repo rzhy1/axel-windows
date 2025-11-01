@@ -1,4 +1,4 @@
-name: Build Axel with Windows Compatibility Patch
+name: Build Axel (Windows Compatibility)
 
 on:
   push:
@@ -8,11 +8,11 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Setup MSYS2 environment
       uses: msys2/setup-msys2@v2
       with:
@@ -28,72 +28,64 @@ jobs:
           git
           wget
           patch
-          
+          pkgconf
+
     - name: Clone Axel source
       shell: msys2 {0}
       run: |
         git clone https://github.com/axel-download-accelerator/axel.git axel-src
         cd axel-src
         git log -1 --oneline
-        
-    - name: Apply Windows compatibility patch
+
+    - name: Apply Windows compatibility fix
       shell: msys2 {0}
       run: |
         cd axel-src
-        printf '%s\n' \
-          '--- a/configure.ac' \
-          '+++ b/configure.ac' \
-          '@@ -42,7 +42,6 @@ AC_CHECK_HEADERS([ \' \
-          '	netdb.h \' \
-          '	netinet/in.h \' \
-          '	netinet/tcp.h \' \
-          '-	arpa/inet.h \' \
-          ' ])' \
-          '' \
-          '# 在文件末尾添加Windows兼容性定义' \
-          '@@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \' \
-          '# Windows兼容性' \
-          'if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then' \
-          '  AC_DEFINE(HAVE_ARPA_INET_H, 0, [Define to 1 if you have the <arpa/inet.h> header file.])' \
-          '+  AC_DEFINE(HAVE_NETINET_IN_H, 1, [Define to 1 if you have the <netinet/in.h> header file.])' \
-          '+else' \
-          '+  AC_CHECK_HEADERS([arpa/inet.h])' \
-          'fi' > simple-fix.patch
 
-        patch -p1 < simple-fix.patch
+        echo "🔧 删除 arpa/inet.h 检查行..."
+        sed -i '/arpa\/inet\.h/d' configure.ac
 
+        echo "🧩 在文件末尾添加 Windows 兼容定义..."
+        cat >> configure.ac <<'EOF'
 
-        
+# --- Windows Compatibility (added by CI) ---
+AS_IF([echo "$host_os" | grep -qi mingw], [
+  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])
+  AC_DEFINE([HAVE_NETINET_IN_H], [1], [Define for Windows compatibility])
+  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])
+])
+EOF
+
     - name: Regenerate configure scripts
       shell: msys2 {0}
       run: |
         cd axel-src
         autoreconf -fi
-        
+
     - name: Configure for Windows build
       shell: msys2 {0}
       run: |
         cd axel-src
-        
+
         ./configure \
           --host=x86_64-w64-mingw32 \
           --disable-nls \
-          CFLAGS="-static -D_WIN32_WINNT=0x0600 -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
+          CFLAGS="-static -DWIN32 -DHAVE_ARPA_INET_H=0 -include winsock2.h -include ws2tcpip.h" \
           LIBS="-lws2_32 -lssl -lcrypto"
-          
-    - name: Build axel
+
+    - name: Build Axel
       shell: msys2 {0}
       run: |
         cd axel-src
-        make -j$(nproc)
-        
+        make -j$(nproc) || (echo "❌ Build failed"; exit 1)
+
     - name: Verify binary
       shell: cmd
       run: |
         cd axel-src\src
         .\axel.exe --version || echo "Binary built successfully"
-        
-    - name: Upload Windows binary artifact
+
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: axel-windows-static
