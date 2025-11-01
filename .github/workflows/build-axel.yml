@@ -52,14 +52,17 @@ jobs:
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i '/AM_GNU_GETTEXT_VERSION/d' configure.ac
 
-        # 使用 echo 逐行追加 Windows 兼容宏
+        # 添加 Windows 兼容宏，并绕过 O_NONBLOCK 检查
         echo '' >> configure.ac
         echo '# --- Windows Compatibility (added by CI) ---' >> configure.ac
         echo 'AS_IF([echo "$host_os" | grep -qi mingw], [' >> configure.ac
         echo '  AC_DEFINE([HAVE_ARPA_INET_H], [0], [No arpa/inet.h on Windows])' >> configure.ac
         echo '  AC_DEFINE([HAVE_NETINET_IN_H], [0], [No netinet/in.h on Windows])' >> configure.ac
+        echo '  AC_DEFINE([_WIN32_WINNT], [0x0600], [Enable modern WinSock2 APIs])' >> configure.ac
         echo '  AC_DEFINE([HAVE_UNISTD_H], [0], [No unistd.h on Windows])' >> configure.ac
         echo '  AC_DEFINE([O_NONBLOCK], [0], [Define to 0 on Windows])' >> configure.ac
+        echo '], [' >> configure.ac
+        echo '  AXEL_CHECK_MACRO([O_NONBLOCK], [fcntl.h])' >> configure.ac
         echo '])' >> configure.ac
 
     - name: Regenerate configure scripts
@@ -73,7 +76,7 @@ jobs:
       run: |
         cd axel-src
 
-        # 删除 configure 缓存
+        # 删除缓存，确保 CV 变量生效
         rm -f config.cache config.log
 
         # POSIX 头文件 CV 变量
@@ -110,7 +113,6 @@ jobs:
         export ac_cv_func_getopt=yes
         export ac_cv_func_strlcpy=yes
         export ac_cv_func_strlcat=yes
-        export ac_cv_macro_O_NONBLOCK=defined
 
         ./configure \
           --host=x86_64-w64-mingw32 \
