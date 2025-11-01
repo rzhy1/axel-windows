@@ -40,29 +40,28 @@ jobs:
       shell: msys2 {0}
       run: |
         cd axel-src
-
-        cat > simple-fix.patch << EOF
---- a/configure.ac
-+++ b/configure.ac
-@@ -42,7 +42,6 @@ AC_CHECK_HEADERS([ \
- 	netdb.h \
- 	netinet/in.h \
- 	netinet/tcp.h \
--	arpa/inet.h \
- ])
- 
- # 在文件末尾添加Windows兼容性定义
-@@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \
- # Windows兼容性
- if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then
-   AC_DEFINE(HAVE_ARPA_INET_H, 0, [Define to 1 if you have the <arpa/inet.h> header file.])
-+  AC_DEFINE(HAVE_NETINET_IN_H, 1, [Define to 1 if you have the <netinet/in.h> header file.])
-+else
-+  AC_CHECK_HEADERS([arpa/inet.h])
- fi
-EOF
+        printf '%s\n' \
+          '--- a/configure.ac' \
+          '+++ b/configure.ac' \
+          '@@ -42,7 +42,6 @@ AC_CHECK_HEADERS([ \' \
+          '	netdb.h \' \
+          '	netinet/in.h \' \
+          '	netinet/tcp.h \' \
+          '-	arpa/inet.h \' \
+          ' ])' \
+          '' \
+          '# 在文件末尾添加Windows兼容性定义' \
+          '@@ -50,6 +49,9 @@ AC_CHECK_HEADERS([ \' \
+          '# Windows兼容性' \
+          'if test "$host_os" = "mingw32" || test "$host_os" = "msys"; then' \
+          '  AC_DEFINE(HAVE_ARPA_INET_H, 0, [Define to 1 if you have the <arpa/inet.h> header file.])' \
+          '+  AC_DEFINE(HAVE_NETINET_IN_H, 1, [Define to 1 if you have the <netinet/in.h> header file.])' \
+          '+else' \
+          '+  AC_CHECK_HEADERS([arpa/inet.h])' \
+          'fi' > simple-fix.patch
 
         patch -p1 < simple-fix.patch
+
 
         
     - name: Regenerate configure scripts
