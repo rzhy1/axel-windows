@@ -29,7 +29,6 @@ jobs:
           patch
           pkgconf
           gettext
-          txt2man
           base-devel
 
     - name: Clone Axel source
