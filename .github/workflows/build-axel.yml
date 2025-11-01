@@ -23,6 +23,7 @@ jobs:
           make
           autoconf
           automake
+          autoconf-archive
           libtool
           git
           wget
