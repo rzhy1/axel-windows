@@ -48,11 +48,13 @@ jobs:
         sed -i '/#include <netinet\/in_systm.h>/a #endif' src/axel.h
         sed -i '/#include <netinet\/in.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in.h>/a #endif' src/axel.h
-        
-        # !!! 这是修复您问题的关键改动 !!!
-        # 解决 fatal error: netinet/ip.h: No such file or directory
         sed -i '/#include <netinet\/ip.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/ip.h>/a #endif' src/axel.h
+        
+        # !!! 这是修复您新问题的关键改动 (1/2) !!!
+        # 解决 fatal error: arpa/inet.h: No such file or directory
+        sed -i '/#include <arpa\/inet.h>/i #ifndef WIN32' src/axel.h
+        sed -i '/#include <arpa\/inet.h>/a #endif' src/axel.h
         
         # --- Autotools 配置脚本生成补丁 ---
         # 1. 彻底移除所有有问题的头文件检查
@@ -69,8 +71,11 @@ jobs:
         # 3. 移除导致 configure 语法错误的多行 _WIN32_WINNT 定义
         sed -i '/AC_DEFINE(\[_WIN32_WINNT\]/{N;d;}' configure.ac
 
-        # 4. 从构建中彻底移除 po 目录和 Gettext 宏
+        # 4. 从构建中彻底移除 po 和 doc 目录
+        # !!! 这是修复您新问题的关键改动 (2/2) !!!
+        # 解决 txt2man: command not found 的问题
         sed -i 's/ po//' Makefile.am
+        sed -i 's/ doc//' Makefile.am
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
         sed -i "s|po/Makefile.in||" configure.ac
         
@@ -97,13 +102,12 @@ jobs:
       run: |
         cd axel-src
         
-        # 更新 config.sub 和 config.guess 以更好地识别 Windows 环境
         wget -O build-aux/config.sub "http://git.savannah.gnu.org/cgit/config.git/plain/config.sub"
         wget -O build-aux/config.guess "http://git.savannah.gnu.org/cgit/config.git/plain/config.guess"
 
         rm -f config.cache config.log
         
-        # 为所有 autoconf 检查的函数提供缓存变量，加速 configure
+        # 为所有 autoconf 检查的函数提供缓存变量
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
         export ac_cv_func_inet_ntoa=yes
@@ -124,10 +128,8 @@ jobs:
         export ac_cv_func_strtoul=yes
         export ac_cv_func_strtoll=yes
 
-        # ==================== 核心改动 ====================
         # 为 O_NONBLOCK 宏检查提供缓存变量，告诉 configure 它“存在”
         export ax_cv_macro_O_NONBLOCK=yes
-        # =================================================
 
         ./configure \
           --host=x86_64-w64-mingw32 \
