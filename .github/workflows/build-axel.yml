@@ -43,10 +43,16 @@ jobs:
         cd axel-src
 
         # --- C 语言级别编译补丁 ---
+        # 为 Unix/Linux 特有的头文件添加 Windows 条件编译判断
         sed -i '/#include <netinet\/in_systm.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in_systm.h>/a #endif' src/axel.h
         sed -i '/#include <netinet\/in.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in.h>/a #endif' src/axel.h
+        
+        # !!! 这是修复您问题的关键改动 !!!
+        # 解决 fatal error: netinet/ip.h: No such file or directory
+        sed -i '/#include <netinet\/ip.h>/i #ifndef WIN32' src/axel.h
+        sed -i '/#include <netinet\/ip.h>/a #endif' src/axel.h
         
         # --- Autotools 配置脚本生成补丁 ---
         # 1. 彻底移除所有有问题的头文件检查
@@ -91,12 +97,13 @@ jobs:
       run: |
         cd axel-src
         
+        # 更新 config.sub 和 config.guess 以更好地识别 Windows 环境
         wget -O build-aux/config.sub "http://git.savannah.gnu.org/cgit/config.git/plain/config.sub"
         wget -O build-aux/config.guess "http://git.savannah.gnu.org/cgit/config.git/plain/config.guess"
 
         rm -f config.cache config.log
         
-        # 为所有 autoconf 检查的函数提供缓存变量
+        # 为所有 autoconf 检查的函数提供缓存变量，加速 configure
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
         export ac_cv_func_inet_ntoa=yes
