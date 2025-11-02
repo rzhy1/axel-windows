@@ -61,7 +61,7 @@ jobs:
         sed -i '/sys\/ioctl\.h/d' configure.ac
         sed -i '/sys\/socket\.h/d' configure.ac
         
-        # 2. 彻底移除 O_NONBLOCK 宏的检查，避免其报错
+        # 2. 彻底移除 O_NONBLOCK 宏的检查
         sed -i '/AXEL_CHECK_MACRO(\[O_NONBLOCK\]/d' configure.ac
 
         # 3. 移除导致 configure 语法错误的多行 _WIN32_WINNT 定义
@@ -75,11 +75,13 @@ jobs:
         
         # 5. 正确集成 Libtool
         sed -i '/AM_INIT_AUTOMAKE/a LT_INIT' configure.ac
-        echo 'ACLOCAL_AMFLAGS = -I m4' | cat - Makefile.am > temp && mv temp Makefile.am
+        echo 'ACLOCAL_AMFLAGS = -I m4' >> Makefile.am
 
-        # 6. 为 Windows 添加一个假的 O_NONBLOCK 定义，以满足脚本逻辑
+        # 6. 为 Windows 添加一个假的 O_NONBLOCK 定义
         echo 'AS_IF([echo "$host_os" | grep -qi mingw], [AC_DEFINE([O_NONBLOCK], [0], [Fake O_NONBLOCK for Windows])])' >> configure.ac
-
+        
+        # 7. 为 Windows 添加特定的链接库，这是更规范的做法
+        echo 'AS_IF([echo "$host_os" | grep -qi mingw], [LIBS="$LIBS -lws2_32 -lssl -lcrypto"])' >> configure.ac
 
     - name: Regenerate configure scripts
       shell: msys2 {0}
@@ -101,7 +103,7 @@ jobs:
 
         rm -f config.cache config.log
         
-        # 为所有 autoconf 检查的函数提供缓存变量
+        # 为 autoconf 检查提供缓存变量
         export ac_cv_func_getaddrinfo=yes
         export ac_cv_func_gettimeofday=yes
         export ac_cv_func_inet_ntoa=yes
@@ -121,15 +123,11 @@ jobs:
         export ac_cv_func_strstr=yes
         export ac_cv_func_strtoul=yes
         export ac_cv_func_strtoll=yes
-
-        # 为 O_NONBLOCK 宏检查提供缓存变量
         export ax_cv_macro_O_NONBLOCK=yes
 
-        # !!! 这是修复您新问题的关键改动 !!!
-        # 禁用自动依赖跟踪，以避免在 MSYS2 环境下出错
+        # !!! 关键改动: 移除了不被支持的 --disable-doc 选项 !!!
         ./configure \
           --host=x86_64-w64-mingw32 \
-          --disable-doc \
           --disable-dependency-tracking
 
     - name: Build Axel
@@ -137,8 +135,7 @@ jobs:
       run: |
         cd axel-src
         make -j$(nproc) \
-          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h" \
-          LIBS="-lws2_32 -lssl -lcrypto"
+          CFLAGS="-static -DWIN32 -include winsock2.h -include ws2tcpip.h"
 
     - name: Verify binary
       shell: cmd
