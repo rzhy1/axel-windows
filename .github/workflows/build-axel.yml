@@ -43,16 +43,12 @@ jobs:
         cd axel-src
 
         # --- C 语言级别编译补丁 ---
-        # 为 Unix/Linux 特有的头文件添加 Windows 条件编译判断
         sed -i '/#include <netinet\/in_systm.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in_systm.h>/a #endif' src/axel.h
         sed -i '/#include <netinet\/in.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/in.h>/a #endif' src/axel.h
         sed -i '/#include <netinet\/ip.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <netinet\/ip.h>/a #endif' src/axel.h
-        
-        # !!! 这是修复您新问题的关键改动 (1/2) !!!
-        # 解决 fatal error: arpa/inet.h: No such file or directory
         sed -i '/#include <arpa\/inet.h>/i #ifndef WIN32' src/axel.h
         sed -i '/#include <arpa\/inet.h>/a #endif' src/axel.h
         
@@ -72,8 +68,6 @@ jobs:
         sed -i '/AC_DEFINE(\[_WIN32_WINNT\]/{N;d;}' configure.ac
 
         # 4. 从构建中彻底移除 po 和 doc 目录
-        # !!! 这是修复您新问题的关键改动 (2/2) !!!
-        # 解决 txt2man: command not found 的问题
         sed -i 's/ po//' Makefile.am
         sed -i 's/ doc//' Makefile.am
         sed -i '/AM_GNU_GETTEXT/d' configure.ac
@@ -128,12 +122,15 @@ jobs:
         export ac_cv_func_strtoul=yes
         export ac_cv_func_strtoll=yes
 
-        # 为 O_NONBLOCK 宏检查提供缓存变量，告诉 configure 它“存在”
+        # 为 O_NONBLOCK 宏检查提供缓存变量
         export ax_cv_macro_O_NONBLOCK=yes
 
+        # !!! 这是修复您新问题的关键改动 !!!
+        # 禁用自动依赖跟踪，以避免在 MSYS2 环境下出错
         ./configure \
           --host=x86_64-w64-mingw32 \
-          --disable-doc
+          --disable-doc \
+          --disable-dependency-tracking
 
     - name: Build Axel
       shell: msys2 {0}
